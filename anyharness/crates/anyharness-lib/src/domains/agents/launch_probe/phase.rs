@@ -163,6 +163,7 @@ impl LaunchProbeService {
     /// Is this harness one an UNATTENDED poke may touch at all? Exposed because
     /// the startup grace turns on it, and a test of the grace that asserted the
     /// grace's own conclusion would be circular.
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn targets_allow_automatic_probe(&self, harness_kind: &str) -> bool {
         self.targets.allows_automatic_probe(harness_kind)
     }

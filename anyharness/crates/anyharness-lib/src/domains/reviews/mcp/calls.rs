@@ -176,7 +176,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn reviewer_result_does_not_nest_a_prompt_lease_behind_a_queued_writer() {
-        let _capture = EnvGuard::off();
+        let _capture = EnvGuard::off().await;
         let _bearer = test_support::set_bearer_token_env(None);
         let _data_key = test_support::set_data_key_env(None);
         let runtime_home = temp_runtime_home("review-mcp-prompt-lease");
@@ -290,8 +290,7 @@ mod tests {
     #[test]
     fn no_role_rejects_review_tool_calls() {
         let error = validate_tool_for_role(ReviewMcpRole::None, "get_review_status")
-            .err()
-            .expect("no-role call should fail");
+            .expect_err("no-role call should fail");
 
         assert!(error.to_string().contains("no active review role"));
     }
@@ -299,8 +298,7 @@ mod tests {
     #[test]
     fn reviewer_rejects_parent_only_tools() {
         let error = validate_tool_for_role(ReviewMcpRole::Reviewer, "get_review_status")
-            .err()
-            .expect("reviewer cannot use parent tool");
+            .expect_err("reviewer cannot use parent tool");
 
         assert!(error.to_string().contains("unknown tool for review role"));
     }
@@ -313,8 +311,7 @@ mod tests {
             },
             "mark_review_revision_ready",
         )
-        .err()
-        .expect("parent without revision signal cannot use signal tool");
+        .expect_err("parent without revision signal cannot use signal tool");
 
         assert!(error.to_string().contains("unknown tool for review role"));
     }

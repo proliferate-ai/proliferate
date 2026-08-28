@@ -471,11 +471,8 @@ mod tests {
         )
         .expect("seed write should succeed");
 
-        let record = set_app_config_api_base_url_at(
-            &path,
-            Some("https://new.example".to_string()),
-        )
-        .expect("set should succeed");
+        let record = set_app_config_api_base_url_at(&path, Some("https://new.example".to_string()))
+            .expect("set should succeed");
 
         assert_eq!(record.api_base_url, Some("https://new.example".to_string()));
         assert!(record.telemetry_disabled);
@@ -505,8 +502,7 @@ mod tests {
         )
         .expect("seed write should succeed");
 
-        let record =
-            set_app_config_api_base_url_at(&path, None).expect("clearing should succeed");
+        let record = set_app_config_api_base_url_at(&path, None).expect("clearing should succeed");
 
         assert_eq!(record.api_base_url, None);
         assert!(record.telemetry_disabled);

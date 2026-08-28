@@ -10,7 +10,7 @@ from .client import (
     set_server_sentry_tag,
     set_server_sentry_user,
 )
-from .privacy import scrub_mapping, scrub_text, scrub_value
+from .scalars import scrub_mapping, scrub_text, scrub_value
 
 __all__ = [
     "capture_server_sentry_exception",

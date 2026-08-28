@@ -48,7 +48,13 @@ pub fn stage_patch(workspace_path: &Path, patch: &str) -> anyhow::Result<()> {
 
     let output = run_git_apply_stdin(
         &repo_root_path,
-        &["apply", "--cached", "--recount", "--whitespace=nowarn", "--unidiff-zero"],
+        &[
+            "apply",
+            "--cached",
+            "--recount",
+            "--whitespace=nowarn",
+            "--unidiff-zero",
+        ],
         patch,
     )?;
     if !output.status.success() {
@@ -56,7 +62,11 @@ pub fn stage_patch(workspace_path: &Path, patch: &str) -> anyhow::Result<()> {
         let msg = stderr.trim();
         anyhow::bail!(
             "{}",
-            if msg.is_empty() { "patch could not be applied to index" } else { msg }
+            if msg.is_empty() {
+                "patch could not be applied to index"
+            } else {
+                msg
+            }
         );
     }
     Ok(())
@@ -76,7 +86,14 @@ pub fn unstage_patch(workspace_path: &Path, patch: &str) -> anyhow::Result<()> {
 
     let output = run_git_apply_stdin(
         &repo_root_path,
-        &["apply", "--cached", "--reverse", "--recount", "--whitespace=nowarn", "--unidiff-zero"],
+        &[
+            "apply",
+            "--cached",
+            "--reverse",
+            "--recount",
+            "--whitespace=nowarn",
+            "--unidiff-zero",
+        ],
         patch,
     )?;
     if !output.status.success() {
@@ -84,7 +101,11 @@ pub fn unstage_patch(workspace_path: &Path, patch: &str) -> anyhow::Result<()> {
         let msg = stderr.trim();
         anyhow::bail!(
             "{}",
-            if msg.is_empty() { "patch could not be removed from index" } else { msg }
+            if msg.is_empty() {
+                "patch could not be removed from index"
+            } else {
+                msg
+            }
         );
     }
     Ok(())

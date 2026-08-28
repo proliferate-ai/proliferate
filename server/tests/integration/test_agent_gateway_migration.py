@@ -44,13 +44,13 @@ from proliferate.db.store.billing_subjects import (
     ensure_personal_billing_subject,
 )
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMVirtualKey
-from proliferate.server.agent_auth import budget as budget_module
-from proliferate.server.agent_auth import enrollment as enrollment_service
-from proliferate.server.agent_auth import migration as migration_service
-from proliferate.server.agent_auth.budget import get_gateway_enrollment_for_user
-from proliferate.server.agent_auth.enrollment import ensure_org_enrollment
-from proliferate.server.agent_auth.free_credits import ensure_signup_free_credit_grant
-from proliferate.server.agent_auth.migration import migrate_legacy_enrollments
+from proliferate.server.ai_gateway import budget as budget_module
+from proliferate.server.ai_gateway import enrollment as enrollment_service
+from proliferate.server.ai_gateway import migration as migration_service
+from proliferate.server.ai_gateway.budget import get_gateway_enrollment_for_user
+from proliferate.server.ai_gateway.enrollment import ensure_org_enrollment
+from proliferate.server.ai_gateway.free_credits import ensure_signup_free_credit_grant
+from proliferate.server.ai_gateway.migration import migrate_legacy_enrollments
 from proliferate.server.agent_auth.state_render import (
     build_agent_auth_state,
 )

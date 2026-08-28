@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -1084,7 +1084,7 @@ impl CoworkRuntime {
             .await;
         let wake_scheduled = self
             .delegation_service
-            .list_wake_schedules(&[link.id.clone()])?
+            .list_wake_schedules(std::slice::from_ref(&link.id))?
             .into_iter()
             .next()
             .is_some();
@@ -1439,7 +1439,7 @@ impl CoworkRuntime {
         &self,
         repo_root: &RepoRootRecord,
         workspace: &WorkspaceRecord,
-        worktree_path: &PathBuf,
+        worktree_path: &Path,
     ) {
         if let Err(error) = self.workspace_runtime.cleanup_failed_worktree(
             &repo_root.path,
@@ -1461,7 +1461,7 @@ impl CoworkRuntime {
         repo_root: &RepoRootRecord,
         workspace: &WorkspaceRecord,
         session: Option<&SessionRecord>,
-        thread_path: &PathBuf,
+        thread_path: &Path,
     ) {
         if let Some(session) = session {
             if let Err(error) = self.session_service.delete_session(&session.id) {
@@ -1650,7 +1650,7 @@ fn run_git<const N: usize>(cwd: Option<&PathBuf>, args: [&str; N]) -> anyhow::Re
 
 fn allocate_coding_workspace_name(
     repo_root_path: &str,
-    runtime_home: &PathBuf,
+    runtime_home: &Path,
     label: Option<&str>,
     workspace_name: Option<&str>,
     branch_name: Option<&str>,
@@ -1754,8 +1754,7 @@ fn coding_workspace_slug(value: &str) -> Option<String> {
 fn coding_workspace_name_from_branch(branch_name: &str) -> Option<String> {
     branch_name
         .split('/')
-        .filter(|segment| !segment.trim().is_empty())
-        .next_back()
+        .rfind(|segment| !segment.trim().is_empty())
         .and_then(coding_workspace_slug)
 }
 

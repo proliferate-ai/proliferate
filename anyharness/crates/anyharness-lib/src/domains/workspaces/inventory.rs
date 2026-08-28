@@ -498,8 +498,7 @@ mod tests {
 
         let error = service
             .prune_orphan(checkout.to_string_lossy().as_ref())
-            .err()
-            .expect("expected owned checkout rejection");
+            .expect_err("expected owned checkout rejection");
 
         assert_eq!(
             error.to_string(),

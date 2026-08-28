@@ -13,7 +13,7 @@ import { LocalRuntimeClient } from "../fixtures/local-runtime.js";
 
 /**
  * T3-WT-1 — worktree workspaces, both lanes.
- * specs/engineering/testing/scenarios.md#T3-WT-1
+ * tests/release/core-release-scenario-manifest.json#T3-WT-1
  *
  * Local lane: real, runs against the local AnyHarness runtime directly (no
  * Python server involved for local workspace/worktree creation — confirmed
@@ -31,7 +31,7 @@ import { LocalRuntimeClient } from "../fixtures/local-runtime.js";
 export const t3Wt1: ScenarioDefinition = {
   id: "T3-WT-1",
   title: "worktree workspaces, both lanes",
-  registryFlowRef: "specs/engineering/testing/scenarios.md#T3-WT-1",
+  registryFlowRef: "tests/release/core-release-scenario-manifest.json#T3-WT-1",
   lanes: ["local", "sandbox"],
   requiredEnv: [],
   plan: ({ runtimeLane }) =>
@@ -64,7 +64,7 @@ export const t3Wt1: ScenarioDefinition = {
       if (isWorldBackedRun(ctx)) {
         await runLocal1WorkspaceLeaf(ctx, {
           scenarioId: "T3-WT-1",
-          registryFlowRef: "specs/engineering/testing/tier-3-scenario-contract.md#local-1",
+          registryFlowRef: "delivery/testing-cicd/archive/tier-3-scenario-contract.md#local-1",
         });
         return;
       }

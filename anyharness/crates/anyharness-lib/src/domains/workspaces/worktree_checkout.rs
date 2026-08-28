@@ -1,13 +1,8 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WorktreeCheckoutMode {
+    #[default]
     NewBranch,
     DetachedRef,
-}
-
-impl Default for WorktreeCheckoutMode {
-    fn default() -> Self {
-        Self::NewBranch
-    }
 }
 
 impl WorktreeCheckoutMode {

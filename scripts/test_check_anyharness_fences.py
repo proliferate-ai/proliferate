@@ -55,9 +55,7 @@ class EdgeBaselineTest(FenceTestCase):
         )
         matches = self.for_rule(result, check_module.EDGE_RULE)
         self.assertEqual(len(matches), 1)
-        self.assertEqual(
-            matches[0].relative_path, f"{DOMAINS_RELATIVE}/alpha/service.rs"
-        )
+        self.assertEqual(matches[0].relative_path, f"{DOMAINS_RELATIVE}/alpha/service.rs")
         self.assertEqual(matches[0].site, "fn go::crate::domains::beta")
         self.assertIn("alpha -> beta", matches[0].detail)
 
@@ -169,9 +167,7 @@ class GroupedFormsTest(FenceTestCase):
     def test_crate_level_group_store_is_seen(self) -> None:
         result = self.scan(
             {
-                "alpha/service.rs": (
-                    "use crate::{domains::beta::store::BetaStore};\n"
-                ),
+                "alpha/service.rs": ("use crate::{domains::beta::store::BetaStore};\n"),
                 "beta/store.rs": "pub struct BetaStore;\n",
             },
             baseline={("alpha", "beta")},

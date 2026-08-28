@@ -198,10 +198,7 @@ async fn run_one_tick(capability: Option<bool>, trace: &Timeline) -> TickOutcome
     let state = LaunchOptionsSyncState::new();
     let watermark_before = state.pushed_revisions();
 
-    heartbeat_and_converge(
-        &config, &cloud, &store, &identity, None, &state, false,
-    )
-    .await;
+    heartbeat_and_converge(&config, &cloud, &store, &identity, None, &state, false).await;
 
     // Every accepted connection must have produced a recorded request. Without
     // this, a connection that was accepted but never readable would leave no hit
@@ -401,8 +398,11 @@ async fn a_true_verdict_acknowledges_before_listing_reading_and_uploading() {
         position(&trace, is_request_containing("GET /v1/agents")).expect("list is in the timeline");
     let status_index = position(&trace, is_request_containing("launch-options"))
         .expect("status read is in the timeline");
-    let upload_index = position(&trace, is_request_containing("/v1/cloud/harness-launch-options"))
-        .expect("upload is in the timeline");
+    let upload_index = position(
+        &trace,
+        is_request_containing("/v1/cloud/harness-launch-options"),
+    )
+    .expect("upload is in the timeline");
     assert!(
         ack_index < list_index,
         "the verdict must be acknowledged before the local list: {ack_index} !< {list_index}"

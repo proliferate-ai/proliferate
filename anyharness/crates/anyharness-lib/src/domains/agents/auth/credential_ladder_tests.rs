@@ -32,7 +32,7 @@ use std::collections::BTreeMap;
 /// the host-scope cases read whatever the process env holds, so an interleaving
 /// with any other env-mutating suite is a false result. This is the crate-wide
 /// lock every such test takes.
-use crate::app::test_support::lock_env;
+use crate::app::test_support::lock_env_blocking;
 
 /// Set or remove a var for the test's lifetime and restore it on drop, so the
 /// matrix below is deterministic on a developer machine that exports provider
@@ -96,7 +96,7 @@ fn workspace_env(value: &str) -> BTreeMap<String, String> {
 /// and no provider accepts it.
 #[test]
 fn workspace_env_var_counts_only_when_non_empty() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let home = make_temp_home();
     let _ambient = AmbientVarGuard::remove(LADDER_VAR);
     let auth = env_only_auth();
@@ -127,7 +127,7 @@ fn workspace_env_var_counts_only_when_non_empty() {
 /// one caller, so the host-ambient read enforces it identically.
 #[test]
 fn host_ambient_env_var_counts_only_when_non_empty() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let home = make_temp_home();
     let auth = env_only_auth();
 
@@ -145,11 +145,17 @@ fn host_ambient_env_var_counts_only_when_non_empty() {
     }
     {
         let _ambient = AmbientVarGuard::set(LADDER_VAR, "  ");
-        assert_eq!(detect_credentials(&auth, &home), CredentialState::MissingEnv);
+        assert_eq!(
+            detect_credentials(&auth, &home),
+            CredentialState::MissingEnv
+        );
     }
     {
         let _ambient = AmbientVarGuard::remove(LADDER_VAR);
-        assert_eq!(detect_credentials(&auth, &home), CredentialState::MissingEnv);
+        assert_eq!(
+            detect_credentials(&auth, &home),
+            CredentialState::MissingEnv
+        );
     }
 
     let _ = std::fs::remove_dir_all(&home);
@@ -161,7 +167,7 @@ fn host_ambient_env_var_counts_only_when_non_empty() {
 /// workspace on the machine.
 #[test]
 fn a_host_exported_var_never_authenticates_a_workspace() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let home = make_temp_home();
     let _ambient = AmbientVarGuard::set(LADDER_VAR, "host-global-key");
     let auth = env_only_auth();
@@ -198,7 +204,7 @@ fn a_host_exported_var_never_authenticates_a_workspace() {
 /// and an empty env value must not skip past discovery either.
 #[test]
 fn ladder_falls_through_env_to_discovery_then_login_then_missing() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let _ambient = AmbientVarGuard::remove(LADDER_VAR);
 
     let with_discovery_and_login = AuthSpec {
@@ -274,7 +280,7 @@ fn ladder_falls_through_env_to_discovery_then_login_then_missing() {
 /// predicate, not over mere presence.
 #[test]
 fn multi_var_slot_needs_one_non_empty_value() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let home = make_temp_home();
     let _first = AmbientVarGuard::remove("ANYHARNESS_LADDER_A");
     let _second = AmbientVarGuard::remove("ANYHARNESS_LADDER_B");
@@ -314,7 +320,7 @@ fn multi_var_slot_needs_one_non_empty_value() {
 /// the per-slot non-empty rule has to hold before aggregation sees it.
 #[test]
 fn all_required_slots_rejects_an_empty_value_in_any_slot() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let home = make_temp_home();
     let _first = AmbientVarGuard::remove("ANYHARNESS_LADDER_A");
     let _second = AmbientVarGuard::remove("ANYHARNESS_LADDER_B");
@@ -344,7 +350,10 @@ fn all_required_slots_rejects_an_empty_value_in_any_slot() {
         CredentialState::MissingEnv
     );
 
-    env.insert("ANYHARNESS_LADDER_B".to_string(), "sk-also-real".to_string());
+    env.insert(
+        "ANYHARNESS_LADDER_B".to_string(),
+        "sk-also-real".to_string(),
+    );
     assert_eq!(
         detect_credentials_with_env(&auth, &home, &env),
         CredentialState::Ready
@@ -358,7 +367,7 @@ fn all_required_slots_rejects_an_empty_value_in_any_slot() {
 /// into a credential gap.
 #[test]
 fn none_policy_stays_ready_under_the_tightened_ladder() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let home = make_temp_home();
     let _ambient = AmbientVarGuard::remove(LADDER_VAR);
 
@@ -391,7 +400,7 @@ fn none_policy_stays_ready_under_the_tightened_ladder() {
 /// any other policy would.
 #[test]
 fn provider_managed_follows_its_slot_ladder_under_the_tightened_ladder() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let home = make_temp_home();
     let _ambient = AmbientVarGuard::remove(LADDER_VAR);
 
@@ -422,4 +431,3 @@ fn provider_managed_follows_its_slot_ladder_under_the_tightened_ladder() {
 
     let _ = std::fs::remove_dir_all(&home);
 }
-

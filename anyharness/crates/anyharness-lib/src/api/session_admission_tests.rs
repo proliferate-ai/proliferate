@@ -6,7 +6,6 @@
 //! controller policy to exercise the sessions-owned conflict mechanics.
 
 use std::path::PathBuf;
-use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::{
@@ -117,10 +116,7 @@ async fn call(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn foreign_and_stale_workflow_sources_denied_owning_admitted() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let mut state = test_state();
     let (run_id, session_id) = controlled_fixture(&mut state);
@@ -164,10 +160,7 @@ async fn foreign_and_stale_workflow_sources_denied_owning_admitted() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn every_fenced_route_conflicts_before_side_effects_and_reads_stay_available() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let mut state = test_state();
     let (_run_id, sid) = controlled_fixture(&mut state);
@@ -284,10 +277,7 @@ async fn every_fenced_route_conflicts_before_side_effects_and_reads_stay_availab
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn purge_and_mobility_fail_closed_while_controlled() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let mut state = test_state();
     let (_run_id, _sid) = controlled_fixture(&mut state);
@@ -323,10 +313,7 @@ async fn destroy_source_fails_closed_while_controlled() {
     // fail closed with the stable 409 before ANY effect — the session row and
     // materialization survive. (Remove the admit/re-check fence and destroy-source
     // 200s with the controlled session deleted.)
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let mut state = test_state();
     let (_run_id, sid) = controlled_fixture(&mut state);
@@ -379,10 +366,7 @@ async fn destroy_source_fails_closed_while_controlled() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn ordinary_sessions_keep_existing_behavior() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state();
     test_support::seed_workspace_with_repo_root(&state.db, WS, "local", "/tmp/admission-ord");

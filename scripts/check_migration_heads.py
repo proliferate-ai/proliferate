@@ -96,8 +96,7 @@ def main() -> int:
             _report(
                 REVISION_ID_RULE_ID,
                 _relative(path),
-                f"revision id {revision} is already declared by "
-                f"{_relative(revisions[revision])}",
+                f"revision id {revision} is already declared by {_relative(revisions[revision])}",
             )
             return 1
         revisions[revision] = path
@@ -108,8 +107,7 @@ def main() -> int:
         _report(
             DOWN_REVISION_RULE_ID,
             "server/alembic/versions",
-            "down_revision points at unknown revision id(s): "
-            + ", ".join(sorted(unknown)),
+            "down_revision points at unknown revision id(s): " + ", ".join(sorted(unknown)),
         )
         return 1
 

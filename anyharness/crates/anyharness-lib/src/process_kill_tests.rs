@@ -1,6 +1,6 @@
 //! Real-process coverage for the shared kill mechanism: the guarantee under
 //! test IS process death, so every case here spawns a real OS process rather
-//! than a fake (`specs/engineering/testing/standard.md`'s crash-drill carve-out is about database
+//! than a fake (`specs/engineering/testing/README.md`'s crash-drill carve-out is about database
 //! resume drills and does not reach this module - see the R3 delivery spec's
 //! Tests section).
 

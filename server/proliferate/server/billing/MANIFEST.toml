@@ -17,4 +17,5 @@ allowed_importers = [
     "organizations",
     "permissions.py",
     "agent_auth",
+    "ai_gateway",
 ]

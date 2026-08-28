@@ -44,6 +44,28 @@ export function deriveAuthStatus(
       : { label: HARNESS_PANE_COPY.gatewayPending, tone: "warning" };
   }
 
+  if (method === "seat") {
+    // Founder ruling 2026-08-27 (PR #2254's acceptance false green): the seat
+    // method may NEVER borrow the CLI arm's native-login state — that arm
+    // reads bare file/keychain presence of the machine's own login, which is
+    // a different credential. A seat's badge reads only the runtime's derived
+    // evidence state (`authState`): the seat tier-1 trial's 401 lands there
+    // as `expired` (the seat STAYS SAVED; only the badge goes red), a green
+    // trial or probe observation lands as `authenticated`/`usable`, and
+    // anything short of evidence is the spec's own word — "unverified".
+    if (!editor.editorState.seatEnabled) {
+      return { label: HARNESS_PANE_COPY.authBadgeNotConfigured, tone: "neutral" };
+    }
+    const display = editor.localAgent?.authState?.display;
+    if (display === "expired") {
+      return { label: HARNESS_PANE_COPY.authBadgeExpired, tone: "destructive" };
+    }
+    if (display === "usable" || display === "authenticated") {
+      return { label: HARNESS_PANE_COPY.authBadgeAuthenticated, tone: "success" };
+    }
+    return { label: HARNESS_PANE_COPY.authBadgeUnverified, tone: "warning" };
+  }
+
   if (method === "api_key") {
     const enabled = editor.editorState.rows.some(
       (row) => row.enabled && isRowComplete(row),

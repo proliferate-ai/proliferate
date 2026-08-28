@@ -174,7 +174,7 @@ export const selfhostQual1: ScenarioDefinition = {
   title:
     "prove the two optional self-host capabilities on one real install: configured GitHub OAuth " +
     "(SH-GITHUB-AUTH) and the operator LiteLLM gateway profile (SH-GATEWAY)",
-  registryFlowRef: "specs/engineering/testing/tier-3-scenario-contract.md#sh-gateway",
+  registryFlowRef: "delivery/testing-cicd/archive/tier-3-scenario-contract.md#sh-gateway",
   lanes: ["selfhost"],
   requiredEnv: SELFHOST_QUAL_REQUIRED_ENV,
   expandCells: (): ScenarioCellSpec[] =>

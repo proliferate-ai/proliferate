@@ -42,20 +42,22 @@ from proliferate.middleware.request_context import RequestContextMiddleware
 from proliferate.middleware.request_telemetry import RequestTelemetryMiddleware
 from proliferate.server.accounts.desktop.api import router as desktop_router
 from proliferate.server.accounts.identity.api import router as identity_auth_router
-from proliferate.server.agent_auth.api import gateway_account_router as agent_gateway_router
 from proliferate.server.agent_auth.api import organization_router as agent_auth_organization_router
 from proliferate.server.agent_auth.api import router as agent_auth_router
 from proliferate.server.agent_auth.worker import (
+    start_agent_seat_usage_probe,
+    stop_agent_seat_usage_probe,
+)
+from proliferate.server.ai_gateway.api import gateway_account_router as agent_gateway_router
+from proliferate.server.ai_gateway.worker import (
     start_agent_gateway_enrollment_backfill,
     start_agent_gateway_llm_topups,
     start_agent_gateway_usage_import,
     start_agent_gateway_verification,
-    start_agent_seat_usage_probe,
     stop_agent_gateway_enrollment_backfill,
     stop_agent_gateway_llm_topups,
     stop_agent_gateway_usage_import,
     stop_agent_gateway_verification,
-    stop_agent_seat_usage_probe,
 )
 from proliferate.server.ai_magic.api import router as ai_magic_router
 from proliferate.server.analytics.api import router as analytics_router

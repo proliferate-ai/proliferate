@@ -122,7 +122,7 @@ impl SessionStore {
             let mut stmt = conn.prepare(
                 "SELECT * FROM sessions WHERE workspace_id = ?1 ORDER BY updated_at DESC",
             )?;
-            let rows = stmt.query_map([workspace_id], |row| map_session(row))?;
+            let rows = stmt.query_map([workspace_id], map_session)?;
             rows.collect()
         })
     }
@@ -135,7 +135,7 @@ impl SessionStore {
     pub fn list_all(&self) -> anyhow::Result<Vec<SessionRecord>> {
         self.db.with_conn(|conn| {
             let mut stmt = conn.prepare("SELECT * FROM sessions ORDER BY updated_at DESC")?;
-            let rows = stmt.query_map([], |row| map_session(row))?;
+            let rows = stmt.query_map([], map_session)?;
             rows.collect()
         })
     }

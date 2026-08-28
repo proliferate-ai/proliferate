@@ -54,9 +54,7 @@ class EdgeBaselineTest(FenceTestCase):
             baseline=set(),
         )
         self.assertEqual(len(result.violations), 1)
-        self.assertEqual(
-            result.violations[0].relative_path, f"{SRC_RELATIVE}/hooks/use-thing.ts"
-        )
+        self.assertEqual(result.violations[0].relative_path, f"{SRC_RELATIVE}/hooks/use-thing.ts")
         self.assertIn("hooks -> stores", result.violations[0].detail)
         self.assertIn("record:", result.violations[0].format())
 
@@ -180,18 +178,14 @@ class CloudGateBaselineTest(FenceTestCase):
         result = self.scan(
             {
                 "hooks/use-thing.ts": (
-                    "export function useThing(cloudActive: boolean) {\n"
-                    "  return cloudActive;\n"
-                    "}\n"
+                    "export function useThing(cloudActive: boolean) {\n  return cloudActive;\n}\n"
                 ),
             },
             baseline=set(),
         )
         gate = [v for v in result.violations if v.rule_id == check_module.GATE_RULE]
         self.assertEqual(len(gate), 1)
-        self.assertEqual(
-            gate[0].relative_path, f"{SRC_RELATIVE}/hooks/use-thing.ts"
-        )
+        self.assertEqual(gate[0].relative_path, f"{SRC_RELATIVE}/hooks/use-thing.ts")
         self.assertIn("undeclared cloud-gate consumer", gate[0].detail)
         self.assertIn("record:", gate[0].format())
 
@@ -248,8 +242,7 @@ class CloudGateBaselineTest(FenceTestCase):
         result = self.scan(
             {
                 "hooks/use-thing.ts": (
-                    "export const a = cloudActive;\n"
-                    "export const b = cloudComputeEnabled;\n"
+                    "export const a = cloudActive;\nexport const b = cloudComputeEnabled;\n"
                 ),
             },
             baseline=set(),

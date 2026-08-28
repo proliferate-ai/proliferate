@@ -247,7 +247,11 @@ pub fn probe_off_host_reachable(ip: IpAddr, port: u16, timeout: Duration) -> Opt
 /// at spawn, and the password rides the session env layer. The (port,
 /// password) pair is never persisted, never logged. `agent_kind` other than
 /// OpenCode always yields `None`.
-pub fn provision_sidedoor_spawn(agent_kind: &str, env: &mut LaunchEnv, session_id: &str) -> Option<SidedoorSpawnConfig> {
+pub fn provision_sidedoor_spawn(
+    agent_kind: &str,
+    env: &mut LaunchEnv,
+    session_id: &str,
+) -> Option<SidedoorSpawnConfig> {
     if agent_kind != AgentKind::OpenCode.as_str() {
         return None;
     }

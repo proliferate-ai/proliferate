@@ -531,13 +531,17 @@ async fn send_message_and_pr5_lifecycle_tools_dispatch_through_the_real_server()
             "status": "durably_queued"
         })
     );
-    let calls = messages.0.lock().unwrap();
-    assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].0, "Q");
-    assert_eq!(calls[0].1, "hello from P");
-    assert_eq!(calls[0].2.source_session_id, "P");
-    assert_eq!(calls[0].2.label, "P");
-    drop(calls);
+    // Explicit block so the spy guard's lexical scope ends before the next
+    // await — `await_holding_lock` is lexical, not flow-aware, and a trailing
+    // `drop(calls)` does not satisfy it.
+    {
+        let calls = messages.0.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "Q");
+        assert_eq!(calls[0].1, "hello from P");
+        assert_eq!(calls[0].2.source_session_id, "P");
+        assert_eq!(calls[0].2.label, "P");
+    }
 
     let forged = authenticated_dispatch(
         &server,

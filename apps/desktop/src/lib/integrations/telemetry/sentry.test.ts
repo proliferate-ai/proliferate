@@ -166,6 +166,33 @@ describe("desktop sentry transport", () => {
     expect((scrubbed.tags as Record<string, unknown>).environment).toBe("[redacted]");
   });
 
+  it("setDesktopSentryTag sets values and clears the tag on an empty value", async () => {
+    const sentry = await loadSentryModule();
+
+    sentry.initializeDesktopSentry({
+      environment: "production",
+      release: "proliferate-desktop@test",
+      sentry: {
+        enabled: true,
+        dsn: "https://sentry.example/123",
+        tracesSampleRate: 1,
+        enableLogs: true,
+      },
+      apiBaseUrl: "https://app.proliferate.com/api",
+      telemetryMode: "hosted_product",
+    });
+
+    sentry.setDesktopSentryTag("session_id", "11111111-2222-4333-8444-555555555555");
+    expect(mocks.setTagMock).toHaveBeenLastCalledWith(
+      "session_id",
+      "11111111-2222-4333-8444-555555555555",
+    );
+
+    // The ProductTelemetry.setTag contract: an empty value clears the tag.
+    sentry.setDesktopSentryTag("session_id", "");
+    expect(mocks.setTagMock).toHaveBeenLastCalledWith("session_id", undefined);
+  });
+
   it("bounds cyclic and deep payloads at the Sentry scrubber entrypoints", async () => {
     const sentry = await loadSentryModule();
 

@@ -24,10 +24,35 @@ function localFunctionalJob(): string {
   return workflow.slice(start, end);
 }
 
-test("staging workflow remains provisional and delegates compatibility to --lane staging", () => {
+test("the staging battery runs in observe mode: visible verdicts, nightly cron, durable session state", () => {
   const job = stagingJob();
-  assert.match(job, /name: tier-3 staging lane \(provisional\)/);
-  assert.match(job, /continue-on-error: true/);
+  assert.match(job, /name: staging battery \(observe mode\)/);
+  // Observe mode (delivery-spec-e2e-observable): red is visible and blocks
+  // nothing by construction — never masked by continue-on-error.
+  assert.doesNotMatch(job, /continue-on-error: true/);
+  // The nightly cron exists at the workflow level and only this job keys on it.
+  assert.match(workflow, /^  schedule:\n(?:    #.*\n)*    - cron: "0 8 \* \* \*"/m);
+  assert.equal((workflow.match(/github\.event_name == 'schedule'/g) ?? []).length, 1);
+  // Rotation write-back: the state file is restored before and saved after the battery.
+  assert.match(job, /actions\/cache\/restore@[0-9a-f]{40}/);
+  assert.match(job, /actions\/cache\/save@[0-9a-f]{40}/);
+  assert.match(job, /RELEASE_E2E_STAGING_SESSION_STATE: \$\{\{ github\.workspace \}\}\/\.release-e2e\/staging-session\.json/);
+  // The digest always runs and never gates — including on preflight-skipped
+  // runs ("no digest arrives" is the acceptance-gate falsifier), so its `if:`
+  // must be exactly always(), with no preflight condition attached.
+  assert.match(job, /name: Morning digest\n\s+if: always\(\)\n/);
+  assert.match(job, /battery-digest\.mjs/);
+  // The digest's Slack chain honors the frozen spec's channel name first.
+  assert.match(job, /SLACK_WEBHOOK_URL: \$\{\{ secrets\.SLACK_BATTERY_WEBHOOK_URL \|\| secrets\.SLACK_ENGINEERING_ALERTS_WEBHOOK_URL \}\}/);
+  // The preflight hard-gates ONLY on the deployment URL — a missing session
+  // credential must surface as blocked cells in the digest, never a skip.
+  assert.equal((job.match(/enabled=false/g) ?? []).length, 1);
+  // The cache save is guarded on the state file existing (no false-red saves).
+  assert.match(job, /if: always\(\) && steps\.session-state\.outputs\.present == 'true'/);
+  // The provisioned-but-previously-unmapped vars now reach the runner.
+  for (const name of ["RELEASE_E2E_WEB_URL", "RELEASE_E2E_GITHUB_TEST_REPO", "RELEASE_E2E_INTEGRATION_API_KEY"]) {
+    assert.match(job, new RegExp(`${name}: \\$\\{\\{ (?:vars|secrets)\\.`));
+  }
   assert.match(job, /LANE: staging/);
   assert.match(job, /SCENARIOS: \$\{\{ github\.event\.inputs\.scenarios \|\| 'all' \}\}/);
   assert.match(job, /make release-e2e LANE="\$LANE"/);
@@ -46,6 +71,18 @@ test("the staging workflow's real all-selector contains only Tier-3 sandbox cell
   assert.ok(cells.every((cell) => cell.scenario_id.startsWith("T3-")));
   assert.ok(cells.some((cell) => cell.scenario_id === "T3-PROV-2"));
   assert.ok(cells.every((cell) => !cell.scenario_id.startsWith("T4-")));
+  // The battery family is admitted by the same gate, unchanged.
+  for (const id of [
+    "T3-BATT-AUTH-1",
+    "T3-BATT-WEB-1",
+    "T3-BATT-GH-1",
+    "T3-BATT-BILL-1",
+    "T3-BATT-WORKER-1",
+    "T3-BATT-INT-1",
+    "T3-BATT-RUN-1",
+  ]) {
+    assert.ok(cells.some((cell) => cell.cell_id === `${id}/sandbox`), `${id} must plan on the staging lane`);
+  }
 });
 
 test("local-functional maps every BYOK env var from the provisioned _API_KEY secret", () => {

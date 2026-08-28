@@ -14,7 +14,7 @@ use super::InstallError;
 /// `PATH` to a temp dir for the length of a guard (readiness's
 /// `test_env_guards::PathEnvGuard`), which makes an unlucky interleaving fail
 /// with a bogus "git not found". This is the crate-wide lock those guards take.
-use crate::app::test_support::lock_env;
+use crate::app::test_support::lock_env_blocking;
 
 #[test]
 fn npm_version_override_rewrites_scoped_and_unscoped_packages() {
@@ -81,7 +81,7 @@ fn extracts_registry_package_names() {
 
 #[test]
 fn managed_npm_package_without_subdir_still_installs_directly() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let package_root = TempDirGuard::new("npm-direct-package").expect("temp dir");
     write_test_npm_package(
         package_root.path(),
@@ -145,7 +145,7 @@ fn managed_npm_package_with_subdir_rejects_registry_specs() {
 
 #[test]
 fn managed_npm_package_with_subdir_installs_from_local_git_repo() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let repo_root = TempDirGuard::new("npm-git-source").expect("repo dir");
     let package_root = repo_root.path().join("npm");
     write_test_npm_package(&package_root, "git-test-agent", "git-test-agent");
@@ -235,7 +235,7 @@ fn managed_npm_package_with_subdir_installs_from_local_git_repo() {
 
 #[test]
 fn managed_npm_package_can_build_agent_binary_from_source() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let repo_root = TempDirGuard::new("source-build-agent").expect("repo dir");
     fs::create_dir_all(repo_root.path().join("src")).expect("create src dir");
     fs::write(
@@ -282,7 +282,7 @@ path = "src/main.rs"
 
 #[test]
 fn run_command_capture_includes_exit_status_with_stderr() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let error = run_command_capture(
         "sh",
         Command::new("sh")

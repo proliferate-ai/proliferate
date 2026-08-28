@@ -59,7 +59,7 @@ pub(crate) fn acquire_blocking(
         // the *clone* path (intended_kind == "managed"), the on-disk checkout is
         // one WE created, not a user's external checkout. Re-register it as
         // managed/cloned so recovery does not silently downgrade the root.
-        if recovered_intended_kind.as_deref() == Some("managed") {
+        if recovered_intended_kind == Some("managed") {
             return recover_cloned_checkout(workspace_runtime, &canonical_string, expected);
         }
         // The frozen contract accepts a "non-existent OR empty" destination for

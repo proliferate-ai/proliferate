@@ -35,7 +35,7 @@ impl Drop for TempDirGuard {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn destroy_source_deletes_checkpoint_row_and_refs_before_workspace_row() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let base = TempDirGuard::new();
@@ -151,7 +151,7 @@ async fn destroy_source_deletes_checkpoint_row_and_refs_before_workspace_row() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn destroy_source_checkpoint_cleanup_failure_preserves_source_for_retry() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let base = TempDirGuard::new();

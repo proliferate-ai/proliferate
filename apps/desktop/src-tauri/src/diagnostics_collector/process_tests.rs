@@ -91,7 +91,7 @@ fn placeholder_is_binary_invalid_on_a_supported_target() {
 fn control_channel_accepts_only_the_closed_typed_shutdown_command() {
     let command = typed_shutdown_command().expect("typed command");
     assert_eq!(command, br#"{"command":"shutdown"}"#);
-    assert!(command.len() + 1 <= MAX_CONTROL_COMMAND_BYTES);
+    assert!(command.len() < MAX_CONTROL_COMMAND_BYTES);
 }
 
 #[tokio::test]
@@ -272,7 +272,11 @@ async fn an_install_id_crosses_the_process_seam_to_the_real_collector() {
     let launcher = install_id_launcher(Some("install-desktop-test-4b71"), &fallback);
 
     let mut process = launcher.launch().await.expect("launch with an install id");
-    let health = process.client().health().await.expect("authenticated health");
+    let health = process
+        .client()
+        .health()
+        .await
+        .expect("authenticated health");
     assert_eq!(health.status, HealthStatusV1::Ready);
     assert_eq!(
         process.orderly_shutdown().await.expect("shutdown"),

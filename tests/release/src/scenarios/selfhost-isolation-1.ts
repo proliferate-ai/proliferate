@@ -122,7 +122,7 @@ export const selfhostIsolation1: ScenarioDefinition = {
   title:
     "prove server-origin isolation: two real self-hosted instances, switch authenticated Desktop-renderer " +
     "product state from A to B through the shared host adapter, assert no A state leaks to B",
-  registryFlowRef: "specs/engineering/testing/tier-3-scenario-contract.md#sh-switch-isolation",
+  registryFlowRef: "delivery/testing-cicd/archive/tier-3-scenario-contract.md#sh-switch-isolation",
   lanes: ["selfhost"],
   // Two boxes on the same AWS account/zone reuse the install scenario's env
   // (region, hosted zone, instance type) plus the BYOK-A key used to create the

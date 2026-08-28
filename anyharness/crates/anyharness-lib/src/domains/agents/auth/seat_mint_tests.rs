@@ -53,11 +53,7 @@ fn mint_scratch(home: &Path) -> PathBuf {
     dir
 }
 
-fn start_options(
-    home: &Path,
-    scratch: &Path,
-    script: &str,
-) -> StartAgentLoginTerminalOptions {
+fn start_options(home: &Path, scratch: &Path, script: &str) -> StartAgentLoginTerminalOptions {
     StartAgentLoginTerminalOptions {
         kind: "claude".to_string(),
         title: "Add a Claude.ai login".to_string(),
@@ -141,7 +137,10 @@ async fn seat_mint_store_render_launch_roundtrip() {
         .await
         .expect("claim the captured token");
     assert_eq!(claimed, token);
-    assert!(!scratch.exists(), "the mint scratch dir must be removed on handoff");
+    assert!(
+        !scratch.exists(),
+        "the mint scratch dir must be removed on handoff"
+    );
     assert_eq!(
         service.claim_mint_token(&record.id).await,
         Err(MintClaimError::NotReady(MintCaptureStatus::Consumed)),
@@ -413,13 +412,92 @@ async fn claim_purges_the_replay_buffer() {
         .lookup_terminal(&record.id)
         .await
         .expect("terminal handle");
-    let (frames, _rx) = handle.subscribe_output(None).await.expect("subscribe after claim");
+    let (frames, _rx) = handle
+        .subscribe_output(None)
+        .await
+        .expect("subscribe after claim");
     assert!(
         !frames_contain(&frames, &token),
         "the one-time handoff must purge the replay copy of the token"
     );
-    service.close_terminal(&record.id).await.expect("close second");
+    service
+        .close_terminal(&record.id)
+        .await
+        .expect("close second");
     let _ = std::fs::remove_dir_all(home);
+}
+
+/// PRODUCTION REGRESSION (2026-08-27), driven through the real PTY and the real
+/// live capture: `claude setup-token` renders through Ink, which HARD-WRAPS its
+/// own output at the PTY width, and the login pane resizes the PTY to its own
+/// width. At the 99-column pane the acceptance run used, the 108-character token
+/// arrived as a 99-character head — itself a valid `^sk-ant-…$` line — plus a
+/// 9-character tail, and the capture stored the head. The stored seat then failed
+/// every session with `401 OAuth access token is invalid`.
+///
+/// The stub below reproduces the wrap byte-for-byte (per-fragment SGR pair,
+/// `\r\r\n` between fragments) at the pane width that broke, and at widths either
+/// side of it. The claimed token must be byte-identical to the printed one.
+#[tokio::test]
+async fn a_hard_wrapped_token_survives_the_live_capture() {
+    for width in [99, 61, 37] {
+        let home = temp_home("seat-wrapped");
+        let scratch = mint_scratch(&home);
+        let token = long_seat_token();
+        let service = AgentLoginTerminalService::new();
+        let script = wrapped_mint_script(&token, width);
+        let record = service
+            .start_terminal(start_options(&home, &scratch, &script))
+            .await
+            .expect("start mint terminal");
+        wait_for_mint_status(&service, &record.id, MintCaptureStatus::Ready).await;
+        let claimed = service
+            .claim_mint_token(&record.id)
+            .await
+            .expect("claim the captured token");
+        assert_eq!(
+            claimed.len(),
+            token.len(),
+            "captured {} chars of a {}-char token wrapped at {width} columns",
+            claimed.len(),
+            token.len(),
+        );
+        assert_eq!(claimed, token, "wrapped at {width} columns");
+        let _ = std::fs::remove_dir_all(home);
+    }
+}
+
+/// A token of the length real setup-tokens have (108: two independently verified
+/// working setup-tokens and a live keychain access token all measured 108).
+fn long_seat_token() -> String {
+    let token = format!("sk-ant-oat01-{}", "A1b2C3d4_Zq-9Xw".repeat(7))[..108].to_string();
+    assert_eq!(token.len(), 108);
+    token
+}
+
+/// The `claude setup-token` success frame as bytes on a PTY of `width` columns:
+/// the label line, a blank, the token hard-wrapped with a per-fragment SGR colour
+/// pair and `\r\r\n` between fragments, then the dim trailer lines. Each fragment
+/// is a `printf` OPERAND, never a format string, so a fragment starting with `-`
+/// or containing `%` cannot change the shell's parse.
+fn wrapped_mint_script(token: &str, width: usize) -> String {
+    let mut script = String::from(
+        "printf '%s\\r\\r\\n\\r\\r\\n' 'Long-lived authentication token created successfully!'; \
+         printf '%s\\r\\r\\n' 'Your OAuth token (valid for 1 year):'; ",
+    );
+    let chars: Vec<char> = token.chars().collect();
+    for fragment in chars.chunks(width) {
+        let fragment: String = fragment.iter().collect();
+        script.push_str(&format!(
+            "printf '\\033[38;2;215;119;87m%s\\033[39m\\r\\r\\n' '{fragment}'; "
+        ));
+    }
+    script.push_str(
+        "printf '\\r\\r\\n'; \
+         printf '%s\\r\\r\\n' \"Store this token securely. You won't be able to see it again.\"; \
+         printf '%s\\r\\r\\n' 'Use this token by setting: export CLAUDE_CODE_OAUTH_TOKEN=<token>'",
+    );
+    script
 }
 
 fn frames_contain(frames: &[crate::live::terminals::TerminalOutputEvent], needle: &str) -> bool {
@@ -494,6 +572,9 @@ async fn mint_is_single_flight_per_harness() {
         "the replacement is a real new terminal"
     );
 
-    service.close_terminal(&third.id).await.expect("close third");
+    service
+        .close_terminal(&third.id)
+        .await
+        .expect("close third");
     let _ = std::fs::remove_dir_all(home);
 }

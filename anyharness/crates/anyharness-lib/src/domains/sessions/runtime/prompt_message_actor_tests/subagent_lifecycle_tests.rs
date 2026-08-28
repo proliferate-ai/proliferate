@@ -8,7 +8,7 @@ use anyharness_contract::v1::SessionEvent;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn reversible_open_cold_starts_the_same_native_conversation_without_replay() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("subagent-open");
@@ -109,7 +109,7 @@ async fn reversible_open_cold_starts_the_same_native_conversation_without_replay
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_promotion_preserves_the_running_turn_and_removes_all_parent_behavior() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("subagent-promote");
@@ -224,7 +224,7 @@ async fn live_promotion_preserves_the_running_turn_and_removes_all_parent_behavi
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn startup_refuses_an_unrepaired_turn_then_starts_after_atomic_repair() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("startup-repair-gate");
@@ -308,7 +308,7 @@ async fn concurrent_start_joins_pending_repair_and_drains_one_queued_prompt_in_s
     const PROBE_TURN_ID: &str = "turn-second-start-repair-probe";
     const QUEUED_TEXT: &str = "queued exactly once after startup repair";
 
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("concurrent-start-repair");

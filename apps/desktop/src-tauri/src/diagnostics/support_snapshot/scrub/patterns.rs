@@ -327,13 +327,16 @@ fn collect_contextual_opaque_matches(
         ContextualRun::Path { candidate_start } => {
             let bytes = value.as_bytes();
             let mut segment_start = candidate_start;
-            for boundary in candidate_start..=end {
-                if boundary < end && bytes[boundary] != b'/' {
+            for (boundary, byte) in bytes.iter().enumerate().take(end).skip(candidate_start) {
+                if *byte != b'/' {
                     continue;
                 }
                 collect_opaque_candidate(value, segment_start, boundary, matches);
                 segment_start = boundary.saturating_add(1);
             }
+            // The run's end is always a boundary, exactly as the inclusive
+            // index loop treated `boundary == end`.
+            collect_opaque_candidate(value, segment_start, end, matches);
         }
     }
 }
@@ -347,7 +350,7 @@ enum ContextualRun {
 fn classify_contextual_run(value: &str, start: usize, end: usize) -> ContextualRun {
     let token_start = contextual_token_start(value, start);
     let query_opener = value[token_start..start]
-        .rfind(|character| matches!(character, '?' | '#'))
+        .rfind(['?', '#'])
         .map(|boundary| token_start + boundary);
     let Some(query_opener) = query_opener else {
         return ContextualRun::Path {

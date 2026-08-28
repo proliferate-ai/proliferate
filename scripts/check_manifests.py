@@ -95,9 +95,7 @@ def system_folders(base: Path) -> list[Path]:
     folders = [
         entry
         for entry in sorted(server_root.iterdir())
-        if entry.is_dir()
-        and not entry.name.startswith("__")
-        and entry.name not in SKIPPED_DOMAINS
+        if entry.is_dir() and not entry.name.startswith("__") and entry.name not in SKIPPED_DOMAINS
     ]
     cloud_root = server_root / "cloud"
     if cloud_root.is_dir():
@@ -133,14 +131,11 @@ def measure_importers(base: Path, folders: list[Path]) -> dict[Path, set[str]]:
     package_root = base.joinpath(*PACKAGE_RELATIVE)
     server_root = base.joinpath(*SERVER_RELATIVE)
     module_prefixes = {
-        folder: "proliferate.server."
-        + ".".join(folder.relative_to(server_root).parts)
+        folder: "proliferate.server." + ".".join(folder.relative_to(server_root).parts)
         for folder in folders
     }
     patterns = {
-        folder: re.compile(
-            rf"(?:from|import)\s+{re.escape(prefix)}(?![A-Za-z0-9_])"
-        )
+        folder: re.compile(rf"(?:from|import)\s+{re.escape(prefix)}(?![A-Za-z0-9_])")
         for folder, prefix in module_prefixes.items()
     }
     importers: dict[Path, set[str]] = {folder: set() for folder in folders}
@@ -163,7 +158,6 @@ def measure_importers(base: Path, folders: list[Path]) -> dict[Path, set[str]]:
 
 def collect_violations(root: Path | None = None) -> list[Violation]:
     base = Path(root).resolve() if root is not None else REPO_ROOT
-    server_root = base.joinpath(*SERVER_RELATIVE)
     folders = system_folders(base)
     violations: list[Violation] = []
     valid: list[Path] = []
@@ -208,9 +202,7 @@ def collect_violations(root: Path | None = None) -> list[Violation]:
                 broken = True
         for field in REQUIRED_LIST_FIELDS:
             value = data.get(field)
-            if not isinstance(value, list) or any(
-                not isinstance(item, str) for item in value
-            ):
+            if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
                 violations.append(
                     Violation(
                         SCHEMA_RULE,
@@ -247,8 +239,7 @@ def collect_violations(root: Path | None = None) -> list[Violation]:
                     IMPORTERS_RULE,
                     relative_manifest,
                     f"allowed_importers::missing::{label}",
-                    f"{label!r} imports this system but is not declared in "
-                    f"allowed_importers",
+                    f"{label!r} imports this system but is not declared in allowed_importers",
                 )
             )
         for label in sorted(declared - actual):

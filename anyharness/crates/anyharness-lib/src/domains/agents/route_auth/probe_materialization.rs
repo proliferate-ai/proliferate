@@ -46,7 +46,7 @@ use super::materialize::{self};
 use super::plan::GatewayModelPlan;
 use super::profile::{AgentRuntimeAuthProfile, ResolvedSource};
 use super::render::render_profile;
-use super::{current_server_origin, load_effective_state, resolve_profile, RouteAuthError};
+use super::{current_server_origin, load_effective_state, RouteAuthError};
 
 mod scratch;
 
@@ -69,7 +69,11 @@ pub fn probe_auth_material(
     runtime_home: &Path,
     harness_kind: &str,
 ) -> Result<ProbeAuthMaterial, RouteAuthError> {
-    probe_auth_material_for_server(runtime_home, harness_kind, current_server_origin().as_deref())
+    probe_auth_material_for_server(
+        runtime_home,
+        harness_kind,
+        current_server_origin().as_deref(),
+    )
 }
 
 /// Core of [`probe_auth_material`], parameterized on the current server origin so
@@ -86,7 +90,12 @@ pub(crate) fn probe_auth_material_for_server(
 ) -> Result<ProbeAuthMaterial, RouteAuthError> {
     let state = load_effective_state(runtime_home, current_server_origin)?;
     let state_revision = state.as_ref().map(|state| state.revision).unwrap_or(0);
-    let profile = resolve_profile(state.as_ref(), harness_kind)?;
+    // The BRIDGED resolution, same as the launcher's: probe env == launch env
+    // must survive the zero-rows cutover — an absent harness the
+    // native-migration bridge keeps native must probe native too, and an
+    // absent+unbridged harness must fail the probe exactly as it would fail
+    // the launch.
+    let profile = super::resolve_profile_for_launch(runtime_home, state.as_ref(), harness_kind)?;
 
     let mut env_value_digests = Vec::new();
     if let AgentRuntimeAuthProfile::Sources(sources) = &profile {

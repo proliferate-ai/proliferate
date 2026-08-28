@@ -205,7 +205,7 @@ def test_set_server_sentry_tag_admits_only_catalog_rows(fake_sdk: _FakeSentrySdk
     sentry_integration.set_server_sentry_tag("http_route", "/orgs/{org_id}")
     sentry_integration.set_server_sentry_tag("session_id", "not-a-uuid")
     sentry_integration.set_server_sentry_tag("unknown_tag", "value")
-    assert fake_sdk.tag_calls == [("domain", "billing")]
+    assert fake_sdk.tag_calls == [("domain", "billing"), ("http_route", "/orgs/{org_id}")]
 
     fake_sdk.tag_calls.clear()
     session_id = str(uuid4())
@@ -222,7 +222,7 @@ def test_correlation_context_skips_unknown_and_invalid_entries(
             "user_id": "not-a-uuid",
             "session_id": "arbitrary",
             "worker_id": "arbitrary",
-            "http_route": "/raw/path",
+            "http_route": f"/orgs/{uuid4()}",
         }
     )
     assert fake_sdk.tag_calls == [("organization_id", organization_id)]
@@ -249,7 +249,7 @@ def test_capture_validates_scope_fields_and_ignores_fingerprint(
     sentry_integration.capture_server_sentry_exception(
         RuntimeError("boom"),
         level="warning",
-        tags={"domain": "billing", "http_route": "/raw", "unknown": "x"},
+        tags={"domain": "billing", "http_route": f"/orgs/{uuid4()}", "unknown": "x"},
         extras={
             "subject_id": subject_id,
             "drop_reason": "unhandled_event_type",
@@ -374,7 +374,7 @@ def test_init_installs_only_the_eight_named_integrations(
         assert asgi.transaction_style == "endpoint"
         assert asgi.middleware_spans is False
 
-@pytest.mark.parametrize("environment", ["trusted-beta", "staging", "production", "Production"])
+@pytest.mark.parametrize("environment", ["trusted-beta", "production", "local", "dogfood"])
 def test_init_passes_valid_identity_byte_for_byte(
     monkeypatch: pytest.MonkeyPatch, environment: str
 ) -> None:
@@ -384,7 +384,7 @@ def test_init_passes_valid_identity_byte_for_byte(
     assert recorder.kwargs["environment"] == environment
 
 @pytest.mark.parametrize("release", ["", "0.3.27", "proliferate-server@bad", "Bearer token"])
-@pytest.mark.parametrize("environment", ["", "STAGING", "Production ", "development"])
+@pytest.mark.parametrize("environment", ["", "STAGING", "Production", "Production ", "dev"])
 def test_init_maps_invalid_identity_to_the_empty_no_discovery_sentinel(
     monkeypatch: pytest.MonkeyPatch, release: str, environment: str
 ) -> None:
@@ -539,7 +539,7 @@ def test_real_client_transaction_drops_its_eligible_attachment(
     assert "release" not in payload and "environment" not in payload
     assert "TXN_ATTACHMENT_SENTINEL_do_not_ship" not in json.dumps(payload, sort_keys=True)
 
-@pytest.mark.parametrize("environment", ["trusted-beta", "staging", "production", "Production"])
+@pytest.mark.parametrize("environment", ["trusted-beta", "production", "local", "dogfood"])
 def test_real_client_preserves_valid_identity_over_hostile_ambient_values(
     monkeypatch: pytest.MonkeyPatch, environment: str
 ) -> None:

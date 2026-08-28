@@ -348,7 +348,7 @@ pub fn init() -> TelemetryGuards {
             dsn,
             sentry::ClientOptions {
                 environment: Some(
-                    env_or_default(TARGET_SENTRY_ENVIRONMENT_ENV, "trusted-beta").into(),
+                    env_or_default(TARGET_SENTRY_ENVIRONMENT_ENV, "production").into(),
                 ),
                 release: Some(
                     env_or_default(SUPERVISOR_SENTRY_RELEASE_ENV, &default_release()).into(),
@@ -375,8 +375,8 @@ pub fn init() -> TelemetryGuards {
             scope.set_tag("surface", "proliferate_supervisor");
             scope.set_tag("telemetry_mode", "hosted_product");
 
-            let runtime_env = std::env::var("PROLIFERATE_RUNTIME_ENV")
-                .unwrap_or_else(|_| "local".to_string());
+            let runtime_env =
+                std::env::var("PROLIFERATE_RUNTIME_ENV").unwrap_or_else(|_| "local".to_string());
             scope.set_tag(RUNTIME_ENV_TAG, &runtime_env);
 
             if let Ok(org_id) = std::env::var("PROLIFERATE_ORG_ID") {
@@ -423,7 +423,10 @@ mod tests {
                     env!("PROLIFERATE_STAMPED_VERSION")
                 )
             }
-            None => format!("proliferate-supervisor@{}", env!("PROLIFERATE_STAMPED_VERSION")),
+            None => format!(
+                "proliferate-supervisor@{}",
+                env!("PROLIFERATE_STAMPED_VERSION")
+            ),
         };
         assert_eq!(release, expected);
     }
@@ -500,14 +503,22 @@ mod tests {
                 tracing::error!("sentry emission regression probe");
             });
         });
-        assert_eq!(events.len(), 1, "tracing ERROR must reach the Sentry client");
+        assert_eq!(
+            events.len(),
+            1,
+            "tracing ERROR must reach the Sentry client"
+        );
     }
 
     #[test]
     fn runtime_env_tag_survives_while_other_env_tags_are_redacted() {
         let mut event = Event::new();
-        event.tags.insert("runtime_env".to_string(), "e2b".to_string());
-        event.tags.insert("deploy_env".to_string(), "prod".to_string());
+        event
+            .tags
+            .insert("runtime_env".to_string(), "e2b".to_string());
+        event
+            .tags
+            .insert("deploy_env".to_string(), "prod".to_string());
         event
             .tags
             .insert("environment_name".to_string(), "prod".to_string());
@@ -515,7 +526,10 @@ mod tests {
         let scrubbed = scrub_event(event).expect("event should remain");
 
         // Bounded deployment identity is preserved; other env-like tags are not.
-        assert_eq!(scrubbed.tags.get("runtime_env").map(String::as_str), Some("e2b"));
+        assert_eq!(
+            scrubbed.tags.get("runtime_env").map(String::as_str),
+            Some("e2b")
+        );
         assert_eq!(
             scrubbed.tags.get("deploy_env").map(String::as_str),
             Some("[redacted]")

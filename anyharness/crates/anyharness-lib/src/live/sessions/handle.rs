@@ -468,6 +468,7 @@ impl LiveSessionHandle {
     /// §5.2): the actor serially compares `expected_turn_id` with its current
     /// active turn and forwards ACP cancellation only on exact match. `None`
     /// means the actor is unavailable (command not delivered or reply lost).
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) async fn cancel_turn_if_active(
         &self,
         expected_turn_id: String,

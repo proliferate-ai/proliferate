@@ -328,11 +328,7 @@ impl SessionActor {
                 respond_to,
             } => {
                 let result = self
-                    .handle_idle_config_command(
-                        &config_id,
-                        &value,
-                        live_snapshot_authorized_model,
-                    )
+                    .handle_idle_config_command(&config_id, &value, live_snapshot_authorized_model)
                     .await;
 
                 match result {

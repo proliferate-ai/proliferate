@@ -47,7 +47,10 @@ impl SessionExtension for LoopSessionHooks {
     ) -> anyhow::Result<SessionClosingActions> {
         let loop_runtime = self.loop_runtime.clone();
         tokio::spawn(async move {
-            loop_runtime.scheduler().disarm_session(&ctx.session_id).await;
+            loop_runtime
+                .scheduler()
+                .disarm_session(&ctx.session_id)
+                .await;
         });
         Ok(SessionClosingActions::default())
     }

@@ -12,7 +12,7 @@ use crate::persistence::Db;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn boundary_a_restarted_worker_recovers_aborted_canonical_queue_insert_once() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("completion-boundary-a");
@@ -88,7 +88,7 @@ async fn boundary_a_restarted_worker_recovers_aborted_canonical_queue_insert_onc
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn boundary_b_restarted_worker_recovers_atomic_enqueued_update_abort_once() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("completion-boundary-b");
@@ -148,7 +148,7 @@ async fn boundary_b_restarted_worker_recovers_atomic_enqueued_update_abort_once(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn boundary_c_rebuilt_actor_recovers_atomic_delivered_update_abort_once() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("completion-boundary-c");

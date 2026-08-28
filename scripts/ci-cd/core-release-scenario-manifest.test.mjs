@@ -5,12 +5,14 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const testingDir = path.join(repoRoot, "specs/engineering/testing");
-const contractPath = path.join(testingDir, "core-release-validation.md");
-const manifestPath = path.join(testingDir, "core-release-scenario-manifest.json");
-const tier3ContractPath = path.join(testingDir, "tier-3-scenario-contract.md");
-const tier4ContractPath = path.join(testingDir, "tier-4-scenario-contract.md");
-const worldsContractPath = path.join(testingDir, "release-worlds-and-fixtures.md");
+// The four contracts were archived 2026-08-26 (specs/engineering/testing/release.md is the
+// live datasheet; the archive keeps the cell-level contract the manifest still mirrors).
+const archiveDir = path.join(repoRoot, "delivery/testing-cicd/archive");
+const contractPath = path.join(archiveDir, "core-release-validation.md");
+const manifestPath = path.join(repoRoot, "tests/release/core-release-scenario-manifest.json");
+const tier3ContractPath = path.join(archiveDir, "tier-3-scenario-contract.md");
+const tier4ContractPath = path.join(archiveDir, "tier-4-scenario-contract.md");
+const worldsContractPath = path.join(archiveDir, "release-worlds-and-fixtures.md");
 const contract = readFileSync(contractPath, "utf8");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 const tier3Contract = readFileSync(tier3ContractPath, "utf8");
@@ -279,10 +281,10 @@ test("runtime activation authority is Worker mailbox to Supervisor, never Worker
 test("every local link in the canonical testing contracts resolves", () => {
   const unresolved = [];
   for (const { contents, baseDir, label } of [
-    { contents: contract, baseDir: testingDir, label: "core" },
-    { contents: tier3Contract, baseDir: testingDir, label: "tier3" },
-    { contents: tier4Contract, baseDir: testingDir, label: "tier4" },
-    { contents: worldsContract, baseDir: testingDir, label: "worlds" },
+    { contents: contract, baseDir: archiveDir, label: "core" },
+    { contents: tier3Contract, baseDir: archiveDir, label: "tier3" },
+    { contents: tier4Contract, baseDir: archiveDir, label: "tier4" },
+    { contents: worldsContract, baseDir: archiveDir, label: "worlds" },
   ]) {
     for (const match of contents.matchAll(/\]\(([^)]+)\)/g)) {
       const target = match[1].trim();

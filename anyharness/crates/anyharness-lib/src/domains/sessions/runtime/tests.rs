@@ -92,7 +92,10 @@ fn insert_startable_session(state: &crate::app::AppState, record: &SessionRecord
         .store()
         .insert(record)
         .expect("insert session");
-    state.session_service.store().seed_empty_launch_intent(&record.id);
+    state
+        .session_service
+        .store()
+        .seed_empty_launch_intent(&record.id);
 }
 
 pub(super) fn link_record(
@@ -465,15 +468,10 @@ fn fork_parent_validation_allows_api_origin_as_advisory_provenance() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn create_and_start_session_rejects_missing_checkout_without_inserting_row() {
-    use std::sync::Mutex;
-
     use crate::domains::agents::installer::seed::AgentSeedStore;
     use crate::domains::sessions::runtime::CreateAndStartSessionError;
 
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("env mutex");
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
 
@@ -542,17 +540,13 @@ async fn create_persisted_internal_session_rejects_missing_checkout_without_inse
     // checkout admission as the interactive create, so a workflow run against
     // a deleted checkout never inserts a durable session row and dispatch
     // classifies it as WorkspaceUnavailable.
-    use std::sync::Mutex;
 
     use crate::domains::agents::installer::seed::AgentSeedStore;
     use crate::domains::sessions::runtime::{
         CreateAndStartSessionError, InternalSessionCreateError, InternalSessionCreateInput,
     };
 
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("env mutex");
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
 
@@ -622,15 +616,11 @@ async fn ensure_live_session_rejects_missing_checkout_for_existing_session() {
     // checkout was deleted must converge on the typed
     // WorkspaceDirectoryMissing at the common live-start seam, not a generic
     // ACP-start failure (which the HTTP layer would surface as a 500).
-    use std::sync::Mutex;
 
     use crate::domains::agents::installer::seed::AgentSeedStore;
     use crate::domains::sessions::runtime::EnsureLiveSessionError;
 
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("env mutex");
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
 
@@ -722,16 +712,12 @@ async fn ensure_live_session_rejects_a_resume_with_revoked_credentials() {
     // falling through to a spawn attempt and a generic ACP-start failure.
     // opencode is ProviderManaged with no required slot, so "nothing
     // selected" is a real, deterministic credential gap (the Scope B fix).
-    use std::sync::Mutex;
 
     use crate::domains::agents::installer::seed::AgentSeedStore;
     use crate::domains::sessions::runtime::EnsureLiveSessionError;
     use crate::integrations::agent_cli::executable::make_executable;
 
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("env mutex");
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
 
@@ -819,17 +805,13 @@ async fn ensure_live_session_reports_an_unsatisfiable_selection_as_route_auth_no
     // pre-A9 (and post-fix) it resolves RouteAuth(SelectionMissing) /
     // AGENT_ROUTE_SELECTION_MISSING, same as create_session would report
     // for the identical state.
-    use std::sync::Mutex;
 
     use crate::domains::agents::installer::seed::AgentSeedStore;
     use crate::domains::agents::route_auth::RouteAuthError;
     use crate::domains::sessions::runtime::EnsureLiveSessionError;
     use crate::integrations::agent_cli::executable::make_executable;
 
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("env mutex");
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
 
@@ -919,16 +901,12 @@ async fn fork_session_rejects_a_parent_with_revoked_credentials() {
     // (`ensure_live_session_handle` -> `start_live_session`) via
     // `fork_session`, so a parent whose agent's credentials regressed gets
     // the same typed `AgentNotReady`, not a generic ACP-start failure.
-    use std::sync::Mutex;
 
     use crate::domains::agents::installer::seed::AgentSeedStore;
     use crate::domains::sessions::runtime::ForkSessionError;
     use crate::integrations::agent_cli::executable::make_executable;
 
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("env mutex");
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
 

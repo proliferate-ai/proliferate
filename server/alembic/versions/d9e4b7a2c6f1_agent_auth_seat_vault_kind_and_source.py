@@ -21,7 +21,7 @@ under the pre-seat CHECKs), then the constraints are rebuilt to their prior
 definitions, keeping the head-to-history downgrade walk traversable.
 
 Revision ID: d9e4b7a2c6f1
-Revises: f2a3b4c5d6e7
+Revises: b3d5f7a9c1e3
 Create Date: 2026-08-26 21:00:00.000000
 """
 
@@ -32,7 +32,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "d9e4b7a2c6f1"
-down_revision: str | Sequence[str] | None = "f2a3b4c5d6e7"
+down_revision: str | Sequence[str] | None = "b3d5f7a9c1e3"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

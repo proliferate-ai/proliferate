@@ -74,7 +74,7 @@ function getWebTelemetryConfig(): WebTelemetryConfig {
   return {
     environment:
       import.meta.env.VITE_PROLIFERATE_ENVIRONMENT?.trim()
-      || (import.meta.env.DEV ? "development" : "production"),
+      || (import.meta.env.DEV ? "local" : "production"),
     release:
       import.meta.env.VITE_PROLIFERATE_RELEASE?.trim()
       // Local dev only: Vercel builds always set VITE_PROLIFERATE_RELEASE to the

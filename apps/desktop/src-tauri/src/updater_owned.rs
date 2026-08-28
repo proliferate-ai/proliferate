@@ -4,7 +4,7 @@
 //! abort/resume, persists nothing, and its `Update::install(bytes)` seam does NO
 //! signature verification. So we own the transfer: stream to a staged file with
 //! resume, enforce a single live download via an abort token, and verify sha256
-//! + minisign against the baked pubkey before install. See Update Flow ADR
+//! and minisign against the baked pubkey before install. See Update Flow ADR
 //! (FR-2) and `specs/systems/desktop-host/desktop-native.md`.
 
 use std::path::{Path, PathBuf};
@@ -39,35 +39,46 @@ pub struct OwnedUpdaterError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum OwnedUpdaterErrorCode {
-    UpdaterCheckFailed,
-    UpdaterDownloadStalled,
-    UpdaterDownloadAborted,
-    UpdaterArtifactHashMismatch,
-    UpdaterInstallFailed,
-    UpdaterDiskFull,
+    // Explicit renames pin the shipped wire strings across the 2026-08-27
+    // variant de-prefixing (enum_variant_names).
+    #[serde(rename = "UPDATER_CHECK_FAILED")]
+    CheckFailed,
+    #[serde(rename = "UPDATER_DOWNLOAD_STALLED")]
+    DownloadStalled,
+    #[serde(rename = "UPDATER_DOWNLOAD_ABORTED")]
+    DownloadAborted,
+    #[serde(rename = "UPDATER_ARTIFACT_HASH_MISMATCH")]
+    ArtifactHashMismatch,
+    #[serde(rename = "UPDATER_INSTALL_FAILED")]
+    InstallFailed,
+    #[serde(rename = "UPDATER_DISK_FULL")]
+    DiskFull,
 }
 
 impl OwnedUpdaterError {
     fn new(code: OwnedUpdaterErrorCode, message: impl Into<String>) -> Self {
-        Self { code, message: message.into() }
+        Self {
+            code,
+            message: message.into(),
+        }
     }
 
     fn check(message: impl Into<String>) -> Self {
-        Self::new(OwnedUpdaterErrorCode::UpdaterCheckFailed, message)
+        Self::new(OwnedUpdaterErrorCode::CheckFailed, message)
     }
 
     fn install(message: impl Into<String>) -> Self {
-        Self::new(OwnedUpdaterErrorCode::UpdaterInstallFailed, message)
+        Self::new(OwnedUpdaterErrorCode::InstallFailed, message)
     }
 
     fn mismatch(message: impl Into<String>) -> Self {
-        Self::new(OwnedUpdaterErrorCode::UpdaterArtifactHashMismatch, message)
+        Self::new(OwnedUpdaterErrorCode::ArtifactHashMismatch, message)
     }
 
     /// Classify a std::io error: a full disk (ENOSPC) is user-actionable.
     fn from_io(err: &std::io::Error) -> Self {
         if err.raw_os_error() == Some(28) {
-            Self::new(OwnedUpdaterErrorCode::UpdaterDiskFull, err.to_string())
+            Self::new(OwnedUpdaterErrorCode::DiskFull, err.to_string())
         } else {
             Self::install(err.to_string())
         }
@@ -118,7 +129,9 @@ pub struct OwnedUpdaterState {
 
 impl OwnedUpdaterState {
     /// Cancel + fully drain any prior download, then install a fresh token and completion channel. Returns the token, its generation, and the sender whose drop signals the future exited. Awaits the prior transfer's teardown (never holding the std mutex across the await) so the file is released.
-    async fn install_fresh_token(&self) -> (CancellationToken, u64, tokio::sync::oneshot::Sender<()>) {
+    async fn install_fresh_token(
+        &self,
+    ) -> (CancellationToken, u64, tokio::sync::oneshot::Sender<()>) {
         self.cancel_and_drain_live().await;
 
         let generation = self
@@ -128,7 +141,11 @@ impl OwnedUpdaterState {
         let (done_tx, done_rx) = tokio::sync::oneshot::channel();
         {
             let mut guard = self.live.lock().expect("owned updater token poisoned");
-            *guard = Some(LiveDownload { token: token.clone(), generation, done_rx });
+            *guard = Some(LiveDownload {
+                token: token.clone(),
+                generation,
+                done_rx,
+            });
         }
         (token, generation, done_tx)
     }
@@ -282,11 +299,7 @@ fn staged_sidecar_path(base: &Path, version: &str) -> PathBuf {
 }
 
 /// Validate a staged artifact for `version`: file + sidecar must exist, bytes must re-hash to the sidecar sha256, and minisign must verify. On any mismatch the artifact and sidecar are deleted and `None` returned.
-pub fn validate_staged(
-    base: &Path,
-    version: &str,
-    pubkey_b64: &str,
-) -> Option<StagedInfo> {
+pub fn validate_staged(base: &Path, version: &str, pubkey_b64: &str) -> Option<StagedInfo> {
     if validated_version(version).is_err() {
         return None;
     }
@@ -356,7 +369,11 @@ pub async fn updater_owned_check<R: Runtime>(
 ) -> Result<CheckResult, OwnedUpdaterError> {
     let mut builder = webview.updater_builder();
 
-    if let Some(endpoint) = endpoint_override.as_deref().map(str::trim).filter(|e| !e.is_empty()) {
+    if let Some(endpoint) = endpoint_override
+        .as_deref()
+        .map(str::trim)
+        .filter(|e| !e.is_empty())
+    {
         let url = url::Url::parse(endpoint)
             .map_err(|e| OwnedUpdaterError::check(format!("bad endpoint override: {e}")))?;
         builder = builder
@@ -374,7 +391,7 @@ pub async fn updater_owned_check<R: Runtime>(
 
     let Some(update) = update else {
         return Err(OwnedUpdaterError::new(
-            OwnedUpdaterErrorCode::UpdaterCheckFailed,
+            OwnedUpdaterErrorCode::CheckFailed,
             "no update available",
         ));
     };
@@ -382,7 +399,11 @@ pub async fn updater_owned_check<R: Runtime>(
     let version = update.version.clone();
     let title = update.body.clone();
     let rid = webview.resources_table().add(update);
-    Ok(CheckResult { version, title, rid })
+    Ok(CheckResult {
+        version,
+        title,
+        rid,
+    })
 }
 
 #[tauri::command]
@@ -468,7 +489,10 @@ async fn download_to_staged(
     // When resuming, the range response length covers only the remaining bytes.
     let total_bytes = content_length.map(|len| received + len);
 
-    let _ = on_progress.send(DownloadProgress { received_bytes: received, total_bytes });
+    let _ = on_progress.send(DownloadProgress {
+        received_bytes: received,
+        total_bytes,
+    });
 
     let mut stream = response.bytes_stream();
     loop {
@@ -478,7 +502,7 @@ async fn download_to_staged(
             biased;
             _ = token.cancelled() => {
                 return Err(OwnedUpdaterError::new(
-                    OwnedUpdaterErrorCode::UpdaterDownloadAborted,
+                    OwnedUpdaterErrorCode::DownloadAborted,
                     "download aborted",
                 ));
             }
@@ -489,7 +513,7 @@ async fn download_to_staged(
                 Err(_) => {
                     tracing::warn!(version, counter = "updater.download.stall", "owned download stalled");
                     return Err(OwnedUpdaterError::new(
-                        OwnedUpdaterErrorCode::UpdaterDownloadStalled,
+                        OwnedUpdaterErrorCode::DownloadStalled,
                         "download stalled: no bytes received",
                     ));
                 }
@@ -499,9 +523,14 @@ async fn download_to_staged(
             },
         };
 
-        file.write_all(&chunk).await.map_err(|e| OwnedUpdaterError::from_io(&e))?;
+        file.write_all(&chunk)
+            .await
+            .map_err(|e| OwnedUpdaterError::from_io(&e))?;
         received += chunk.len() as u64;
-        let _ = on_progress.send(DownloadProgress { received_bytes: received, total_bytes });
+        let _ = on_progress.send(DownloadProgress {
+            received_bytes: received,
+            total_bytes,
+        });
     }
 
     // Terminal progress: with no Content-Length the TS layer never saw
@@ -511,7 +540,9 @@ async fn download_to_staged(
         total_bytes: Some(received),
     });
 
-    file.flush().await.map_err(|e| OwnedUpdaterError::from_io(&e))?;
+    file.flush()
+        .await
+        .map_err(|e| OwnedUpdaterError::from_io(&e))?;
     drop(file);
 
     let bytes = std::fs::read(&partial).map_err(|e| OwnedUpdaterError::from_io(&e))?;
@@ -527,8 +558,8 @@ async fn download_to_staged(
         signature: update.signature.clone(),
         staged_at: chrono::Utc::now().to_rfc3339(),
     };
-    let sidecar = serde_json::to_vec(&info)
-        .map_err(|e| OwnedUpdaterError::install(e.to_string()))?;
+    let sidecar =
+        serde_json::to_vec(&info).map_err(|e| OwnedUpdaterError::install(e.to_string()))?;
     std::fs::write(staged_sidecar_path(base, &version), sidecar)
         .map_err(|e| OwnedUpdaterError::from_io(&e))?;
 

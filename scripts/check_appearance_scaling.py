@@ -46,14 +46,13 @@ hardcoded remedy string.
 from __future__ import annotations
 
 import argparse
-from collections import Counter
-from dataclasses import dataclass
 import json
-from pathlib import Path
 import re
 import sys
-from typing import Iterable, Mapping, Sequence
-
+from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -65,9 +64,7 @@ from scripts import lint_records  # noqa: E402  (path shim must precede the impo
 
 CHECKER = "scripts/check_appearance_scaling.py"
 RULES = lint_records.load("product")
-OWNED_RULE_IDS = frozenset(
-    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
-)
+OWNED_RULE_IDS = frozenset(rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER)
 
 # Every shipped frontend source root, which is exactly the set Tailwind scans
 # from `product.css` (`@source`). A root that ships utilities but is not listed here
@@ -77,9 +74,7 @@ PRODUCTION_ROOTS = (
     REPO_ROOT / "apps" / "packages" / "product-client" / "src",
     REPO_ROOT / "apps" / "desktop" / "src",
 )
-DESIGN_CSS_FILES = (
-    REPO_ROOT / "apps" / "packages" / "design" / "src" / "css" / "product.css",
-)
+DESIGN_CSS_FILES = (REPO_ROOT / "apps" / "packages" / "design" / "src" / "css" / "product.css",)
 DESIGN_TOKEN_FILE = REPO_ROOT / "apps" / "packages" / "design" / "src" / "tokens.ts"
 BASELINE_FILE = REPO_ROOT / "scripts" / "appearance_scaling_baseline.json"
 EXTENSIONS = {".ts", ".tsx"}
@@ -88,12 +83,15 @@ EXTENSIONS = {".ts", ".tsx"}
 # are the only source exceptions; generated CSS defaults are outside the scanned
 # roots and are drift-locked against these tables by appearance-css-drift.test.ts.
 FIXED_TEXT_SOURCE_EXCEPTIONS = {
-    "apps/packages/product-client/src/lib/domain/preferences/appearance.ts":
-        "canonical UI, readable-code, window-zoom, and glyph ladders",
-    "apps/packages/product-client/src/lib/domain/preferences/appearance.test.ts":
-        "exact canonical appearance-ramp pins",
-    "apps/packages/product-client/src/lib/domain/preferences/appearance-css-drift.test.ts":
-        "exact generated-token drift pins",
+    "apps/packages/product-client/src/lib/domain/preferences/appearance.ts": (
+        "canonical UI, readable-code, window-zoom, and glyph ladders"
+    ),
+    "apps/packages/product-client/src/lib/domain/preferences/appearance.test.ts": (
+        "exact canonical appearance-ramp pins"
+    ),
+    "apps/packages/product-client/src/lib/domain/preferences/appearance-css-drift.test.ts": (
+        "exact generated-token drift pins"
+    ),
 }
 GLYPH_SOURCE_EXCEPTIONS: dict[str, str] = {}
 STATUS_DOT_SOURCE_EXCEPTIONS: dict[str, str] = {}
@@ -162,9 +160,7 @@ FIXED_TEXT_PATTERNS = (
     ),
     (
         FONT_SIZE_PROPERTY_RULE,
-        re.compile(
-            r"\bfontSize\s*:\s*(?:[0-9]+(?:\.[0-9]+)?|[\"'][0-9.]+(?:px|rem|em)[\"'])"
-        ),
+        re.compile(r"\bfontSize\s*:\s*(?:[0-9]+(?:\.[0-9]+)?|[\"'][0-9.]+(?:px|rem|em)[\"'])"),
     ),
     (
         FONT_SIZE_CSS_RULE,
@@ -227,9 +223,7 @@ ARBITRARY_SIZE_RE = re.compile(r"(?<![A-Za-z0-9_-])size-\[[^\]]+\]")
 # banned outright: virtualization math, measured overlays and grid positioning
 # produce legitimate ones, so the law is "no more than today, anywhere", and the
 # per-file census burns down as surfaces migrate onto the spacing scale.
-ARBITRARY_BRACKET_GEOMETRY_RE = re.compile(
-    r"(?<![A-Za-z0-9_-])(?:w|h|p|m|inset)-\[[^\]]+\]"
-)
+ARBITRARY_BRACKET_GEOMETRY_RE = re.compile(r"(?<![A-Za-z0-9_-])(?:w|h|p|m|inset)-\[[^\]]+\]")
 # `shadow-keystone` (and its historical `-sm`/`-lg` spellings) is banned from
 # commit one even though no consumer has been migrated yet: the token is removed
 # by the authority, so any surviving use is a dead class, not a pending
@@ -283,15 +277,13 @@ JS_MOTION_LITERAL_RE = re.compile(
 # desktop shell's engine, so a prefixed-only declaration is the one that actually
 # renders. Matching either spelling means two paired declarations report two hits
 # on two different lines, which is the honest count; nothing is deduped away.
-BACKDROP_FILTER_RE = re.compile(
-    r"(?<![\w-])(?:-webkit-)?backdrop-filter\s*:", re.IGNORECASE
-)
+BACKDROP_FILTER_RE = re.compile(r"(?<![\w-])(?:-webkit-)?backdrop-filter\s*:", re.IGNORECASE)
 RAW_HEX_RE = re.compile(r"#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{1}|[0-9a-fA-F]{3}(?:[0-9a-fA-F]{2})?)?\b")
 NEGATIVE_HEX_ASSERTION_RE = re.compile(r"\.not\.toContain\(\s*[\"']#[0-9a-fA-F]{3,8}[\"']\s*\)")
-LONG_LIST_RE = re.compile(
-    r"\{\s*(?P<owner>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\.map\s*\("
+LONG_LIST_RE = re.compile(r"\{\s*(?P<owner>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\.map\s*\(")
+LONG_LIST_OWNER_RE = re.compile(
+    r"(?:rows?|runs?|sessions?|workspaces?|files?|threads?)$", re.IGNORECASE
 )
-LONG_LIST_OWNER_RE = re.compile(r"(?:rows?|runs?|sessions?|workspaces?|files?|threads?)$", re.IGNORECASE)
 
 # Brand and provider marks are exact-file allowlisted: their hexes are the
 # third-party brand contract, not app palette.
@@ -304,34 +296,36 @@ RAW_HEX_FILE_ALLOWLIST = {
 # Rule families whose pre-existing sites are censused per file and may only
 # shrink. A rule stays here after reaching zero entries: an empty census is an
 # absolute ban, so no edit to this set is needed when a category is finished.
-STAGED_RULE_IDS = frozenset({
-    STOCK_TEXT_RULE,
-    ARBITRARY_TEXT_RULE,
-    FONT_SIZE_PROPERTY_RULE,
-    FONT_SIZE_CSS_RULE,
-    GLYPH_ATTRIBUTE_RULE,
-    GLYPH_STYLE_RULE,
-    GLYPH_UTILITY_RULE,
-    GLYPH_PROP_RULE,
-    GLYPH_ALIAS_RULE,
-    GLYPH_COMPONENT_DEFAULT_RULE,
-    SVG_DESCENDANT_RULE,
-    STATUS_GLYPH_RULE,
-    ARBITRARY_RADIUS_RULE,
-    ARBITRARY_Z_RULE,
-    ARBITRARY_GAP_RULE,
-    ARBITRARY_SIZE_RULE,
-    ARBITRARY_BRACKET_GEOMETRY_RULE,
-    RETIRED_SHADOW_RULE,
-    RETIRED_ACCENT_RULE,
-    FOREGROUND_ALPHA_RULE,
-    NUMERIC_DURATION_RULE,
-    INLINE_EASING_RULE,
-    INLINE_MOTION_RULE,
-    JS_MOTION_RULE,
-    AUTHORED_BACKDROP_RULE,
-    RAW_HEX_RULE,
-})
+STAGED_RULE_IDS = frozenset(
+    {
+        STOCK_TEXT_RULE,
+        ARBITRARY_TEXT_RULE,
+        FONT_SIZE_PROPERTY_RULE,
+        FONT_SIZE_CSS_RULE,
+        GLYPH_ATTRIBUTE_RULE,
+        GLYPH_STYLE_RULE,
+        GLYPH_UTILITY_RULE,
+        GLYPH_PROP_RULE,
+        GLYPH_ALIAS_RULE,
+        GLYPH_COMPONENT_DEFAULT_RULE,
+        SVG_DESCENDANT_RULE,
+        STATUS_GLYPH_RULE,
+        ARBITRARY_RADIUS_RULE,
+        ARBITRARY_Z_RULE,
+        ARBITRARY_GAP_RULE,
+        ARBITRARY_SIZE_RULE,
+        ARBITRARY_BRACKET_GEOMETRY_RULE,
+        RETIRED_SHADOW_RULE,
+        RETIRED_ACCENT_RULE,
+        FOREGROUND_ALPHA_RULE,
+        NUMERIC_DURATION_RULE,
+        INLINE_EASING_RULE,
+        INLINE_MOTION_RULE,
+        JS_MOTION_RULE,
+        AUTHORED_BACKDROP_RULE,
+        RAW_HEX_RULE,
+    }
+)
 STAGED_CENSUS_KEY = "stagedViolations"
 # Reported when a censused (file, rule) allocates more than the file now uses.
 # Deliberately NOT a staged rule: it is the guard on the census, so it can never
@@ -457,7 +451,7 @@ def raw_hex_is_allowed(path: Path, source: str, match: re.Match[str]) -> bool:
         return True
     if re.search(r"(?:https?|proliferate)://[^\s\"']*#[^\s\"']*", line):
         return True
-    if re.search(r"url\(\s*$", source[max(0, match.start() - 8):match.start()]):
+    if re.search(r"url\(\s*$", source[max(0, match.start() - 8) : match.start()]):
         return True
 
     digits = value[1:]
@@ -467,10 +461,8 @@ def raw_hex_is_allowed(path: Path, source: str, match: re.Match[str]) -> bool:
         line,
         re.IGNORECASE,
     )
-    if digits.isdigit() and len(digits) in {3, 4} and not color_bearing:
-        # PR/issue identifiers such as #737 and #1042 are not CSS colors.
-        return True
-    return False
+    # PR/issue identifiers such as #737 and #1042 are not CSS colors.
+    return bool(digits.isdigit() and len(digits) in {3, 4} and not color_bearing)
 
 
 def foreground_alpha_percent(raw_alpha: str) -> float:
@@ -512,9 +504,7 @@ def check_foundation_source(path: Path, source: str) -> list[Violation]:
     for rule_id, pattern in checks:
         for match in pattern.finditer(source_without_comments):
             violations.append(
-                Violation(
-                    rule_id, path, line_number(source, match.start()), matched_text(match)
-                )
+                Violation(rule_id, path, line_number(source, match.start()), matched_text(match))
             )
 
     def is_negative_assertion(offset: int) -> bool:
@@ -549,9 +539,7 @@ def check_foundation_source(path: Path, source: str) -> list[Violation]:
             if is_marked_activity_declaration(match.start()):
                 continue
             violations.append(
-                Violation(
-                    rule_id, path, line_number(source, match.start()), matched_text(match)
-                )
+                Violation(rule_id, path, line_number(source, match.start()), matched_text(match))
             )
 
     for match in FOREGROUND_ALPHA_RE.finditer(source_without_comments):
@@ -623,9 +611,7 @@ def check_source(path: Path, source: str) -> list[Violation]:
     ):
         for match in pattern.finditer(source_without_comments):
             violations.append(
-                Violation(
-                    rule_id, path, line_number(source, match.start()), matched_text(match)
-                )
+                Violation(rule_id, path, line_number(source, match.start()), matched_text(match))
             )
 
     icons = imported_icon_names(source)
@@ -701,7 +687,9 @@ def check_design_css_source(path: Path, source: str) -> list[Violation]:
         r":root(?:\[[^\]]*\]|:[a-z-]+(?:\([^)]*\))?)*\s*\{(?P<body>[\s\S]*?)\}"
     )
     for root_match in global_root_re.finditer(source_without_comments):
-        custom_property = re.search(r"^\s*--[a-z0-9-]+\s*:", root_match.group("body"), re.MULTILINE)
+        custom_property = re.search(
+            r"^\s*--[a-z0-9-]+\s*:", root_match.group("body"), re.MULTILINE
+        )
         if custom_property:
             violations.append(
                 Violation(
@@ -723,9 +711,8 @@ def check_design_css_source(path: Path, source: str) -> list[Violation]:
         return "/* activity-motion */" in marker_scope and "infinite" in rule_body.lower()
 
     for match in CSS_MOTION_LITERAL_RE.finditer(source_without_comments):
-        is_marked_activity = (
-            "animation" in match.group(0).lower()
-            and is_marked_infinite_activity(match.start())
+        is_marked_activity = "animation" in match.group(0).lower() and is_marked_infinite_activity(
+            match.start()
         )
         if not is_marked_activity:
             violations.append(
@@ -764,7 +751,8 @@ def check_design_css_source(path: Path, source: str) -> list[Violation]:
                     UNOWNED_BACKDROP_RULE,
                     path,
                     line_number(source, match.start()),
-                    f"{matched_text(match)} declared by `{' '.join(selector.split()).lstrip('} ')}`",
+                    f"{matched_text(match)} declared by "
+                    f"`{' '.join(selector.split()).lstrip('} ')}`",
                 )
             )
 
@@ -993,8 +981,7 @@ def iter_production_files() -> list[Path]:
     files: list[Path] = []
     for root in PRODUCTION_ROOTS:
         files.extend(
-            path for path in sorted(root.rglob("*"))
-            if path.is_file() and not should_skip(path)
+            path for path in sorted(root.rglob("*")) if path.is_file() and not should_skip(path)
         )
     return files
 
@@ -1092,9 +1079,7 @@ def write_baseline(path: Path = BASELINE_FILE) -> int:
 
     sealed = sealed_prefixes(existing)
     resealed = sorted(
-        key
-        for key in current
-        if any(key.startswith(prefix) for prefix, _ in sealed)
+        key for key in current if any(key.startswith(prefix) for prefix, _ in sealed)
     )
     if resealed:
         print("Refusing to census a sealed directory; these are finished, not staged:")
@@ -1138,11 +1123,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     explicit = [path.resolve() for path in args.paths] if args.paths else None
     if explicit is not None:
-        explicit = [
-            path
-            for path in explicit
-            if path in DESIGN_CSS_FILES or not should_skip(path)
-        ]
+        explicit = [path for path in explicit if path in DESIGN_CSS_FILES or not should_skip(path)]
         if not explicit:
             return 0
     violations = collect_violations(explicit)

@@ -112,7 +112,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn live_only_prompt_uses_the_exact_preflight_handle_without_substitution() {
-        let _capture = EnvGuard::off();
+        let _capture = EnvGuard::off().await;
         let _bearer = test_support::set_bearer_token_env(None);
         let _data_key = test_support::set_data_key_env(None);
         let runtime_home = temp_runtime_home("loop-exact-handle");
@@ -171,7 +171,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn dead_session_fire_is_a_noop_and_does_not_cold_start() {
-        let _capture = EnvGuard::off();
+        let _capture = EnvGuard::off().await;
         let _bearer = test_support::set_bearer_token_env(None);
         let _data_key = test_support::set_data_key_env(None);
         // A process-level capture flag inherited by the test runner could make

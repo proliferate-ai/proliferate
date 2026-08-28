@@ -117,7 +117,10 @@ fn service_identity_comes_from_the_record_component_release_and_environment() {
         .iter()
         .map(|entry| {
             let resource = &entry["resource"];
-            assert_eq!(resource_value(resource, "service.version"), "2026.08.10-rc1");
+            assert_eq!(
+                resource_value(resource, "service.version"),
+                "2026.08.10-rc1"
+            );
             assert_eq!(
                 resource_value(resource, "deployment.environment.name"),
                 "dogfood"
@@ -179,9 +182,11 @@ fn detailed_record_carries_its_message_as_the_body_and_typed_arguments_as_attrib
             },
         }))
     );
-    assert!(attribute_of(log, "proliferate.argument.context")
-        .expect("object argument")["kvlistValue"]["values"]
-        .is_array());
+    assert!(
+        attribute_of(log, "proliferate.argument.context").expect("object argument")["kvlistValue"]
+            ["values"]
+            .is_array()
+    );
 }
 
 #[test]
@@ -313,7 +318,11 @@ fn assert_base_resource_attributes(attributes: &[Value], key: &ResourceKey) {
 fn a_configured_dev_tag_is_added_to_resource_attributes_without_disturbing_the_rest() {
     let key = sample_resource_key();
     let attributes = resource_attributes(&key, Some("alice"), None);
-    assert_eq!(attributes.len(), 6, "the five base attributes plus dev.user");
+    assert_eq!(
+        attributes.len(),
+        6,
+        "the five base attributes plus dev.user"
+    );
     assert_eq!(
         attributes
             .iter()
@@ -423,8 +432,11 @@ fn the_customer_policy_drops_a_non_operational_argument_a_dogfood_build_keeps() 
         },
     ];
 
-    let (customer, refused) =
-        encode_batch_with_policy(ExportPolicy::LifecycleOnly, None, std::slice::from_ref(&record));
+    let (customer, refused) = encode_batch_with_policy(
+        ExportPolicy::LifecycleOnly,
+        None,
+        std::slice::from_ref(&record),
+    );
     assert_eq!(refused, 0, "the record itself is still exportable");
     let log = all_log_records(&customer)[0];
     assert!(attribute_of(log, "proliferate.argument.kept").is_some());
@@ -465,7 +477,11 @@ fn encode_batch_applies_the_compiled_policy() {
 fn the_install_id_is_stamped_as_a_resource_attribute_when_the_host_supplies_one() {
     let key = sample_resource_key();
     let attributes = resource_attributes(&key, None, Some("install-9f2c"));
-    assert_eq!(attributes.len(), 6, "the five base attributes plus install id");
+    assert_eq!(
+        attributes.len(),
+        6,
+        "the five base attributes plus install id"
+    );
     assert_eq!(
         attributes
             .iter()
@@ -494,13 +510,13 @@ fn an_absent_install_id_omits_the_attribute_entirely() {
 /// only field in the payload that is stable across producer restarts.
 #[test]
 fn every_resource_stream_in_a_batch_carries_the_same_install_id() {
-    let (payload, _) = encode_batch_with_policy(
-        ExportPolicy::All,
-        Some("install-9f2c"),
-        &fixture_records(),
-    );
+    let (payload, _) =
+        encode_batch_with_policy(ExportPolicy::All, Some("install-9f2c"), &fixture_records());
     let resources = payload["resourceLogs"].as_array().expect("resource logs");
-    assert!(resources.len() > 1, "the fixture must span several resource streams");
+    assert!(
+        resources.len() > 1,
+        "the fixture must span several resource streams"
+    );
     for resource in resources {
         let value = resource["resource"]["attributes"]
             .as_array()
@@ -508,6 +524,9 @@ fn every_resource_stream_in_a_batch_carries_the_same_install_id() {
             .iter()
             .find(|attribute| attribute["key"] == "proliferate.install_id")
             .expect("proliferate.install_id attribute");
-        assert_eq!(value["value"], serde_json::json!({ "stringValue": "install-9f2c" }));
+        assert_eq!(
+            value["value"],
+            serde_json::json!({ "stringValue": "install-9f2c" })
+        );
     }
 }

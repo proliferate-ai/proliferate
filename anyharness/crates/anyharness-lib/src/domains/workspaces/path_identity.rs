@@ -48,9 +48,7 @@ pub fn resolve_for_comparison(path: &Path) -> Option<PathBuf> {
             }
             return Some(resolved);
         }
-        if parent.components().next().is_none() {
-            return None;
-        }
+        parent.components().next()?;
         cursor = parent;
     }
 }

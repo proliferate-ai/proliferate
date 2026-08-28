@@ -45,7 +45,7 @@ Two rules above everything:
     section of its owner's spec, never a spec of its own.
   - `engineering/<name>/` — how we test, observe, ship, secure, and support;
     these own no product state and consume every system's `Emits` and `Proof`.
-    The per-PR standards are `engineering/testing/standard.md` and
+    The per-PR standards are `engineering/testing/README.md` and
     `engineering/observability/standard.md` (state the tier(s) or why none is
     feasible; state the observability delta or "none") — review-mode, no
     body-parsing CI ceremony.

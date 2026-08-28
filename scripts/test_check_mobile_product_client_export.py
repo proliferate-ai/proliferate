@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from scripts import check_mobile_product_client_export as check_module
-
 
 DOMAIN_IMPORT = "@proliferate/product-client/internal/domain/chats/model"
 
@@ -33,9 +32,7 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
         thing. A record renamed out from under the engine fails here.
         """
         return [
-            error
-            for error in errors
-            if rule_id in error and detail in error and "found:" in error
+            error for error in errors if rule_id in error and detail in error and "found:" in error
         ]
 
     def has(self, errors: list[str], rule_id: str, detail: str) -> None:
@@ -50,9 +47,7 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
         path.write_text(content, encoding="utf-8")
         return path
 
-    def write_json(
-        self, root: Path, relative_path: str, value: object
-    ) -> Path:
+    def write_json(self, root: Path, relative_path: str, value: object) -> Path:
         return self.write_text(
             root,
             relative_path,
@@ -103,9 +98,7 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
     ) -> list[str]:
         return check_module.check_preflight(
             root,
-            metro_facts=(
-                expected_metro_facts() if metro_facts is None else metro_facts
-            ),
+            metro_facts=(expected_metro_facts() if metro_facts is None else metro_facts),
         )
 
     def test_valid_domain_import_and_built_targets_pass(self) -> None:
@@ -133,24 +126,18 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
                 'void import("@proliferate/product-client/internal/host/client");',
                 '(require)!<ModuleShape>("@proliferate/product-client/internal/primitives/Button");',
                 '(require)("@proliferate/product-client/internal/access/cloud");',
-                "vi!.mock<ModuleShape>("
-                '"@proliferate/product-client/internal/components/Chat");',
-                "(jest!).mock!<ModuleShape>("
-                '"@proliferate/product-client/internal/stores/chats");',
-                '(<typeof require>require)(<string>'
+                'vi!.mock<ModuleShape>("@proliferate/product-client/internal/components/Chat");',
+                '(jest!).mock!<ModuleShape>("@proliferate/product-client/internal/stores/chats");',
+                "(<typeof require>require)(<string>"
                 '"@proliferate/product-client/internal/components/Angle");',
                 r'requ\u0069re("@proliferate/product-client/internal/components/Escaped");',
-                'require?.("@proliferate/" + '
-                '"product-client/internal/components/Optional");',
-                'void import(`@proliferate/${"product-client"}'
-                '/internal/components/Template`);',
-                'void import(true ? '
+                'require?.("@proliferate/" + "product-client/internal/components/Optional");',
+                'void import(`@proliferate/${"product-client"}/internal/components/Template`);',
+                "void import(true ? "
                 '"@proliferate/product-client/internal/components/Conditional" '
                 ': "./local");',
-                'require("" || '
-                '"@proliferate/product-client/internal/components/Logical");',
-                'require((0, '
-                '"@proliferate/product-client/internal/components/Sequence"));',
+                'require("" || "@proliferate/product-client/internal/components/Logical");',
+                'require((0, "@proliferate/product-client/internal/components/Sequence"));',
                 '(<typeof vi>vi).mock(("@proliferate/'
                 'product-client/internal/components/Asserted"!));',
             )
@@ -169,10 +156,8 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
     def test_relative_product_client_source_paths_fail(self) -> None:
         mobile_source = "\n".join(
             (
-                "import { model } from "
-                '"../../packages/product-client/src/domain/chats/model";',
-                "require("
-                '"../../packages/product-client/src/components/Chat");',
+                'import { model } from "../../packages/product-client/src/domain/chats/model";',
+                'require("../../packages/product-client/src/components/Chat");',
             )
         )
         with tempfile.TemporaryDirectory() as directory:
@@ -227,9 +212,7 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
                     "compilerOptions": {
                         "baseUrl": ".",
                         "paths": {
-                            "@proliferate/product-client/*": [
-                                "../packages/product-client/src/*"
-                            ]
+                            "@proliferate/product-client/*": ["../packages/product-client/src/*"]
                         },
                     }
                 },
@@ -365,9 +348,7 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
                             "offset": {"line": 0, "column": 0},
                             "map": {
                                 "version": 3,
-                                "sourceRoot": (
-                                    "file:///repo/apps/packages/product-client/"
-                                ),
+                                "sourceRoot": ("file:///repo/apps/packages/product-client/"),
                                 "sources": ["src/domain/chats/model.ts"],
                                 "names": [],
                                 "mappings": "",
@@ -403,11 +384,7 @@ class MobileProductClientExportCheckerTest(unittest.TestCase):
             errors = check_module.check_export_maps(export_dir)
 
         self.assertEqual(
-            len(
-                self.matching(
-                    errors, "FE-EXPORT-9", "forbidden ProductClient source"
-                )
-            ),
+            len(self.matching(errors, "FE-EXPORT-9", "forbidden ProductClient source")),
             2,
         )
 

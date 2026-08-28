@@ -16,7 +16,7 @@ use crate::domains::workspaces::archive::refs as archive_refs;
 ///    active, and the flag reads false.
 #[tokio::test]
 async fn flag_off_freezes_live_checkpoints_without_policy_culling() {
-    let _env = EnvGuard::off();
+    let _env = EnvGuard::off().await;
     assert!(!checkpoint_capture_enabled());
     let harness = Harness::new("flag-off");
     harness.worktree_workspace("ws-1");
@@ -45,7 +45,7 @@ async fn flag_off_freezes_live_checkpoints_without_policy_culling() {
 ///    row beyond N, and exempt an in-flight revert even from the age cap.
 #[tokio::test]
 async fn retention_culls_to_n_with_safety_and_inflight_exemptions() {
-    let _env = EnvGuard::on();
+    let _env = EnvGuard::on().await;
     let harness = Harness::new("retention");
     harness.worktree_workspace("ws-1");
     let service = harness.service();
@@ -114,7 +114,7 @@ async fn retention_culls_to_n_with_safety_and_inflight_exemptions() {
 /// An older fresh safety row outside keep-N must take the ordinary N-cull.
 #[tokio::test]
 async fn retention_exempts_only_the_newest_safety_checkpoint_beyond_keep_n() {
-    let _env = EnvGuard::on();
+    let _env = EnvGuard::on().await;
     let harness = Harness::new("retention-newest-safety-only");
     harness.worktree_workspace("ws-1");
     let n = super::retention::RETENTION_KEEP_N;
@@ -173,7 +173,7 @@ async fn retention_exempts_only_the_newest_safety_checkpoint_beyond_keep_n() {
 
 #[tokio::test]
 async fn retention_age_cap_culls_even_the_newest_safety_checkpoint() {
-    let _env = EnvGuard::on();
+    let _env = EnvGuard::on().await;
     let harness = Harness::new("retention-age");
     harness.worktree_workspace("ws-1");
     harness.make_checkpoint(
@@ -229,7 +229,7 @@ async fn retention_age_cap_culls_even_the_newest_safety_checkpoint() {
 
 #[tokio::test]
 async fn checkpoint_retention_never_mutates_archive_or_rescue_refs() {
-    let _env = EnvGuard::on();
+    let _env = EnvGuard::on().await;
     let harness = Harness::new("namespace-isolation");
     harness.worktree_workspace("ws-1");
 
@@ -317,7 +317,7 @@ fn archive_and_rescue_ref_map(repo_root: &Path) -> BTreeMap<String, String> {
 ///    never loses its refs.
 #[tokio::test]
 async fn the_orphan_reap_converges_both_crash_states_and_spares_live_rows() {
-    let _env = EnvGuard::on();
+    let _env = EnvGuard::on().await;
     let harness = Harness::new("deletion-order");
     harness.worktree_workspace("ws-1");
     let service = harness.service();
@@ -368,7 +368,7 @@ async fn the_orphan_reap_converges_both_crash_states_and_spares_live_rows() {
 
 #[tokio::test]
 async fn a_first_rowless_capture_is_discovered_from_the_repo_refs() {
-    let _env = EnvGuard::off();
+    let _env = EnvGuard::off().await;
     let harness = Harness::new("rowless-discovery");
     harness.worktree_workspace("ws-1");
     let tree = make_tree(&harness.repo_root, "rowless-only.txt", "orphan");
@@ -392,7 +392,7 @@ async fn a_first_rowless_capture_is_discovered_from_the_repo_refs() {
 
 #[tokio::test]
 async fn the_orphan_reap_fails_closed_when_a_row_cannot_be_mapped() {
-    let _env = EnvGuard::on();
+    let _env = EnvGuard::on().await;
     let harness = Harness::new("mapping-error");
     harness.worktree_workspace("ws-1");
     harness.make_checkpoint(
@@ -423,7 +423,7 @@ async fn the_orphan_reap_fails_closed_when_a_row_cannot_be_mapped() {
 
 #[tokio::test]
 async fn purge_expiry_marker_keeps_failed_cleanup_discoverable_to_the_sweep() {
-    let _env = EnvGuard::off();
+    let _env = EnvGuard::off().await;
     assert!(!checkpoint_capture_enabled());
     let harness = Harness::new("purge-discovery");
     harness.worktree_workspace("ws-1");

@@ -131,10 +131,7 @@ fn sanitize_path_component(value: &str) -> String {
 /// Apply one [`FileSpec`]: create the isolated dir (revision-keyed families GC
 /// stale siblings first) and write its config file 0600 where the family has
 /// one. Idempotent per revision.
-pub(super) fn apply_file_spec(
-    runtime_home: &Path,
-    spec: &FileSpec,
-) -> Result<(), RouteAuthError> {
+pub(super) fn apply_file_spec(runtime_home: &Path, spec: &FileSpec) -> Result<(), RouteAuthError> {
     match &spec.path_family {
         PathFamily::ClaudeConfig => {
             let dir = claude_config_dir_path(runtime_home);
@@ -153,10 +150,7 @@ pub(super) fn apply_file_spec(
         }
         PathFamily::OpencodeConfig => {
             let dir = prepare_revision_dir(runtime_home, OPENCODE_CONFIG_PREFIX, spec.revision)?;
-            write_private_file(
-                &dir.join(OPENCODE_CONFIG_FILE_NAME),
-                spec_contents(spec)?,
-            )?;
+            write_private_file(&dir.join(OPENCODE_CONFIG_FILE_NAME), spec_contents(spec)?)?;
             for sub in [OPENCODE_XDG_CONFIG_SUBDIR, OPENCODE_XDG_DATA_SUBDIR] {
                 create_dir(&dir.join(sub))?;
             }

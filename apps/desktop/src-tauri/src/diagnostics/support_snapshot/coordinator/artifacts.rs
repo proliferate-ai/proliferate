@@ -338,9 +338,7 @@ fn valid_sha(value: &str) -> bool {
 }
 
 pub(super) fn valid_artifact_id(value: &str) -> bool {
-    value
-        .strip_prefix(ARTIFACT_PREFIX)
-        .is_some_and(|digest| valid_sha(digest))
+    value.strip_prefix(ARTIFACT_PREFIX).is_some_and(valid_sha)
 }
 
 fn canonical_uuid(value: &str) -> bool {

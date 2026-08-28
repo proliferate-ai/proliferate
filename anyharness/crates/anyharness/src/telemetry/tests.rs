@@ -19,7 +19,7 @@ use anyharness_lib::observability::{
 use proliferate_diagnostics_client::ResolvedRecordName;
 use proliferate_diagnostics_protocol::v1::types::{DetailedKindV1, StandardStreamV1};
 
-fn sentry_test_options() -> sentry::ClientOptions {
+pub(super) fn sentry_test_options() -> sentry::ClientOptions {
     sentry::ClientOptions {
         release: Some("anyharness@test".into()),
         environment: Some("test".into()),

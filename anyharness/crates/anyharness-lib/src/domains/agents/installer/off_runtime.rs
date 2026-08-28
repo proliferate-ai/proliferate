@@ -30,9 +30,9 @@ where
 {
     match tokio::task::spawn_blocking(f).await {
         Ok(inner) => inner,
-        Err(join_error) => {
-            Err(anyhow::anyhow!("install-agents worker thread panicked: {join_error}"))
-        }
+        Err(join_error) => Err(anyhow::anyhow!(
+            "install-agents worker thread panicked: {join_error}"
+        )),
     }
 }
 

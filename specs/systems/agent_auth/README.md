@@ -17,6 +17,8 @@ This spec reads as ground truth for the final system. Every difference from what
 | client | the courier files (`use-local-auth-state-sync.ts`, `local-auth-state.ts`, the sidecar origin line) · the settings auth panes and onboarding auth surfaces (consumers) |
 | data | `fixtures/contracts/agent-auth-state/` (the wire pin) · the generated SDK clients |
 
+`domains/agents/seat_cooling/` — the per-seat cooling state store (`0077_seat_cooling.sql`) — is agent_auth-owned but not yet colocated with the rest of the runtime cell; it folds into `domains/agent_auth/` at convergence.
+
 **Responsibilities:**
 
 - Know which auth methods exist for each harness, and hold each person's choice per (harness, surface).
@@ -36,7 +38,7 @@ This spec reads as ground truth for the final system. Every difference from what
 | User login, JWTs, org membership | identity | a different auth |
 | Pixels | the settings surface | panes render this system's documents and add nothing |
 
-**The three methods** — every way a harness authenticates is one of these, and all three are the same shape (a credential rendered into the launch):
+**The three methods** — every way a harness authenticates *through this system* is one of these, and all three are the same shape (a credential rendered into the launch):
 
 | Method | The user is saying | Rendered at launch as |
 | --- | --- | --- |
@@ -44,7 +46,7 @@ This spec reads as ground truth for the final system. Every difference from what
 | **api_key / provider config** | "use my own provider account" | the named env var, or the provider's full native env set |
 | **seat** | "run on this Max subscription" | `CLAUDE_CODE_OAUTH_TOKEN`, a long-lived `claude setup-token` credential from the vault |
 
-Native harness login is not a method: it is an onboarding detection that offers to become a seat, never a launch-time auth source. A harness with zero enabled selections is unconfigured, and launches refuse with words.
+Native harness login is not a method — it is never a selection row and never rendered into the document — but it is a permanent way to run (ruled 2026-08-27): a harness with no selection row and a detected working native login launches natively, indefinitely, and the status surface says so honestly ("using your own login"). Adding a managed method is an optional upgrade — the detection carries the offer to become a seat — never a gate. A harness with no selection row and no detected native auth is unconfigured, and launches refuse with words. Org policy's existing `native` vocabulary value is the control knob for teams that want to force managed auth.
 
 **Rules of the road:**
 
@@ -52,6 +54,20 @@ Native harness login is not a method: it is an onboarding detection that offers 
 - **Couriers carry, never interpret.** An opinion in transit is a bug.
 - **Refusals speak plain words.** Every typed error names its cause and what to do; a bare error code never reaches a human.
 - **Credential material exists in two places only** — the vault at rest, the launch materialization in flight. Never logs.
+
+**Fence enforcement** — who may import this system is machine-held, not convention:
+
+| Boundary | Held by |
+| --- | --- |
+| Rust: which domains may import `agent_auth` | [lints/anyharness/fences.toml](../../../lints/anyharness/fences.toml) — the domain is a node in the fence graph; its edge list is the Doors tables in machine form (AH-FENCE-001, shrink-only baseline that must equal reality exactly), and no sibling domain reaches its store (AH-FENCE-002) |
+| Rust: layer direction inside the cell (api never imports live; live imports domain) | [scripts/check_anyharness_boundaries.py](../../../scripts/check_anyharness_boundaries.py) |
+| Server: which modules may import `server/agent_auth/` | [lints/server/fences.toml](../../../lints/server/fences.toml) held by [scripts/check_server_fences.py](../../../scripts/check_server_fences.py) (SRV-FENCE-001) — same record shape and shrink-only rule as the anyharness and frontend fences |
+| Server: the vault and selection stores | the `NamedStoreBoundary` rows in [scripts/check_server_boundaries.py](../../../scripts/check_server_boundaries.py) (SRV-STORE-8, record in [lints/server/boundaries.toml](../../../lints/server/boundaries.toml)) — credential-bearing store symbols are owner-locked to this system's modules |
+| Frontend: panes reach this system only through `lib/access` | [scripts/check_frontend_boundaries.py](../../../scripts/check_frontend_boundaries.py) (the FE-ACCESS rules) with [lints/frontend/fences.toml](../../../lints/frontend/fences.toml) |
+| The wire document | the contract fixture, pinned by tests on both sides — a shape change fails whichever side didn't move |
+| Credentials never in logs | [scripts/check_agent_auth_secret_logs.py](../../../scripts/check_agent_auth_secret_logs.py) |
+
+Two rules of the road are held by review, not machinery: *couriers carry, never interpret* and *panes render documents and add nothing*. A violation there is a review finding, not a checker failure.
 
 ## 1 · Cells
 
@@ -83,6 +99,8 @@ Native harness login is not a method: it is an onboarding detection that offers 
         - The local HTTP API serves it to the frontend; the courier reports the ack from it; readiness consumes it through one seam (`apply_launch_route_upgrade`).
     - `start_login(harness, variant)` — the login terminal, including the `mint_seat` variant.
         - The settings pane's "Authenticate" and the seat-minting affordance are its only callers.
+    - `current_server_origin()` / `load_effective_state(runtime_home, origin)` / `state_file_path(runtime_home)` — the effective-state read surface: which server issued the applied document, and where its file lives on disk.
+        - **One consumer: `launch_options` (`basis.rs`, `tests.rs`).** The launch-options basis reads the same effective-state seam a launch uses, so its persisted revision never drifts from what a real launch would apply; `tests.rs` also reaches `launch_probe::test_support::snapshot` (test-only).
 - **Consumes:** the applied document (from the courier) · the catalog surface (which harnesses exist, which auth contexts each declares) · the terminal machinery for login flows.
 
 ### the courier — desktop TS
@@ -215,6 +233,7 @@ How delivery is governed:
 - **`sequence`** — in the document. Monotonic per surface, bumped only by a render whose content changed; the runtime rejects any push whose sequence is below the persisted one.
 - **`fingerprint`** — a `GET /state` rider only, never in the document. A content hash of the canonical harnesses array; pure change detection.
 - **A no-op render changes neither.** Downstream invalidation keys on per-harness content, never on the document's sequence.
+- **`lineage`** (ruled 2026-08-27) — each machine's status document carries a lineage identity, and the server persists the current lineage per (user, surface). A push from any other lineage is rejected with a typed plain-words error; recovery is one explicit user action — "reset this machine" — which forgets the stored lineage server-side so the next push adopts cleanly. Within-lineage sequence monotonicity is unchanged. Automatic acceptance of new lineages was rejected as unsound — a delayed push from the old install could resurrect retired state; this is the simplest sound mechanism for a rare, dev-only event.
 - **`issuing_server_origin`** — the server-switch guard. The courier stamps the origin it fetched from; the runtime treats a document from any other origin as absent.
 - **Unsatisfiable sources stay visible.** The harness keeps its entry with the dead source omitted — present-but-empty fails closed at launch, and the refusal names the actual reason.
 - **Two riders on `GET /state`**, stripped by the courier before the push: `fingerprint`, and `harness_settings` (the surface's full settings map, so an unconfigured harness's toggles still reach the pane).
@@ -288,7 +307,7 @@ Everything that puts a secret into the vault or takes one out. Every change here
     - Single-flight per harness — a second mint focuses the open terminal. (New machinery: today's login-terminal service spawns unconditionally.)
     - Identity is user-entered: the system can learn neither email nor plan (setup-tokens carry no profile scope), so the mint sheet asks for the account email and optionally the plan tier — stored as `title` + a display tag, defaulting to "Max seat N".
     - Prior art: the claude adapter's portable-auth keychain export (`auth/claude.rs`) — the capture generalizes an existing move.
-- **Verification is the ordinary launch probe**, run under the seat's isolated home after apply — no separate mechanism. A failed verification leaves the seat saved, shown unverified with the probe's failure detail, retried on the engine's normal backoff.
+- **Verification is the ordinary launch probe**, run under the seat's isolated home after apply — no separate mechanism. The probe exercises the seat's credential with a deliberate 1-token `POST /v1/messages` trial (ruled 2026-08-27) — the only call reliably inside a setup token's `user:inference` scope (metadata endpoints can 401 on *valid* tokens) — folded onto the probe's existing trial facts. A failed verification leaves the seat saved: a `401`/`403` shows it **expired** in plain words; a transport error shows it **unverified**, claiming nothing either way; both retry on the engine's normal backoff. The trial is the same 1-token call flow 5's usage probe makes — one call serves both facts rather than burning twice.
 - **Revoking an in-use key refuses** with `409 agent_api_key_referenced`, naming the harnesses using it — keys disable, they never dangle.
 
 ```mermaid
@@ -319,7 +338,8 @@ The heart of the system, triggered by every session create, resume, and fork.
 - **Headless runs resolved earlier, server-side at placement** — `resolve_headless`: run override → the subject's own selection → the org default → a loud refusal, and **no branch may resolve to another person's vault row**. The resolved source travels in the run's own rendered document; the runtime never runs the ladder.
 - **Render the recipes** (the per-harness application recipes in §4, cell 2) into the world the harness runs in.
 - **Apply the answer last** at spawn: env to set, env to strip — a leftover `ANTHROPIC_API_KEY` on the machine can never outrank the chosen method.
-- **Refuse with words, always:** `NoConfiguredSource` (nothing configured) · `SourceUnsatisfied` naming why (out of credits, key revoked) · `AllSeatsCooling` naming the earliest reset · a malformed state file.
+- **Absent-harness resolution is detection-aware** (ruled 2026-08-27): a harness with no document entry but a detected working native login launches natively — permanently, not as a transition. Refusal is reserved for a harness with nothing to run on.
+- **Refuse with words, always:** `NoConfiguredSource` (nothing configured *and* no native login detected) · `SourceUnsatisfied` naming why (out of credits, key revoked) · `AllSeatsCooling` naming the earliest reset · a malformed state file.
 
 ```mermaid
 sequenceDiagram
@@ -338,7 +358,8 @@ The decision logic, since this flow carries the most:
 ```text
 launch_facts(harness, ctx):
   entry = applied doc[harness]                 # origin guard checked at load
-  no entry            → Err(NoConfiguredSource)      # "Claude Code isn't set up — pick a method in Settings"
+  no entry            → detected working native login? launch natively   # ruled 2026-08-27 — permanent
+                        else Err(NoConfiguredSource)   # "Claude Code isn't set up — pick a method in Settings"
   sources empty       → Err(SourceUnsatisfied{why})  # "out of LLM credits — top up" / "key revoked"
   method == seat      → seat = next active seat, round-robin, skipping cooling   # runtime-local decision
                         all cooling → Err(AllSeatsCooling{earliest_reset})
@@ -595,7 +616,7 @@ Rules that hold across every recipe:
 
 **Rotation ownership.** The rendered document carries **every active seat** for a harness as sources, in vault order; the runtime owns the rotation decision, because the runtime is where limit errors are observed. It keeps a per-seat cooling record (seat id, cooling_until) beside the status documents, picks the next non-cooling seat round-robin at each launch, and reports every limit hit upward through the courier as an `agent_seat_limit_hit` event so the server's meters and any future cross-machine reconciliation see it. The status document exposes the serving seat and the next in line (the design's serving-now / next-up tags), and rotation is a per-harness toggle riding `agent_auth_harness_settings` — off pins the applied seat. The server never picks seats; it only supplies the pool.
 
-**Method availability**, as `methods(harness)` computes it — from facts the runtime actually holds, consistent with "policy gates writes, not launches": a method row is available when the catalog declares the method for the harness AND its material is present in the applied document (a gateway source rendered, an api_key source rendered, at least one seat source in the pool). Org policy and enrollment sync are server facts enforced at selection-write and render time — a disallowed or unsynced method simply never reaches the document, so the runtime needs no policy knowledge. `applied` comes from the applied document, never from detection. Native appears as a detection row (`detected`, with the mint offer), never as an available launch method.
+**Method availability**, as `methods(harness)` computes it — from facts the runtime actually holds, consistent with "policy gates writes, not launches": a method row is available when the catalog declares the method for the harness AND its material is present in the applied document (a gateway source rendered, an api_key source rendered, at least one seat source in the pool). Org policy and enrollment sync are server facts enforced at selection-write and render time — a disallowed or unsynced method simply never reaches the document, so the runtime needs no policy knowledge. `applied` comes from the applied document, never from detection. Native appears as a detection row (`detected`, with the mint offer), never as a selectable method; when it is what a launch would use — no selection row, a detected working login — the status document says so plainly (the "using your own login" state, ruled 2026-08-27), and the offer to add a managed method is a nudge, never a gate.
 
 **Probe targeting**, per event: `Startup` probes every eligible harness once; `AuthApplied{changed}` probes only the harnesses whose document content changed (today's `AuthApplied` is the widest possible apply — the changed-set is target); `InstallCompleted` and `FirstDetected` probe that harness; `LoginTerminal` probes the harness whose login terminal closed; `LiveContradiction` re-probes a harness whose live session contradicted the observation; `Manual` is the user's refresh; `BackoffExpired` retries exactly the harness whose backoff lapsed. Cursor is excluded from every unattended probe (its keychain prompts) and probes only on manual refresh.
 
@@ -661,10 +682,10 @@ useSeatUsage()           // the meters; returns the latest sample per seat
 - **Opening the agents settings pane** re-reads status and methods, and forces a fresh usage sample for visible seats (the pane-open probe). While the seat meters stay visible they re-read the usage samples on a modest interval — a server-fed DB read keeping already-taken samples current, not a probe loop and not a status-document poll (the no-polling law governs the runtime status document).
 - **After a login terminal closes**, the runtime has already poked itself (`LoginTerminal`); the frontend just re-reads — it never issues its own poke here.
 - **After a selection or vault mutation acks**, the query set invalidates and re-reads: selection PUT → selections + state + status; key create/revoke → keys + selections + status; seat mint → keys + status + usage.
-- **Manual refresh** is the one user-facing poke: the refresh affordance calls the runtime's refresh route, renders `queued`/`running` inline, and — on failure — shows the backoff line with the next-attempt countdown, never an eternal spinner.
-- **A stale status renders as stale**, not as loading: the last observation stays visible with a "re-checking" marker while the runtime re-probes (the dims-never-extinguishes rule, rendered).
+- **Manual refresh** is the one user-facing poke: the refresh affordance calls the runtime's refresh route, renders `queued`/`running` inline, and — on failure — shows the retry as stale-age, never an eternal spinner.
+- **A stale status renders as stale**, not as loading: the last observation stays visible with a "re-checking" marker while the runtime re-probes (the dims-never-extinguishes rule, rendered). Probe-retry state renders as stale-age ("last checked 4m ago — retrying"); the status document deliberately carries no next-attempt timestamp, so there is no countdown to render (ruled 2026-08-27).
 
-**The onboarding card is state-bound, never timed.** It completes when every adopted harness reaches a terminal state (usable, authenticated, or installed-with-next-action), each badge carrying its next-action affordance; a stuck probe shows its backoff countdown. No timer advances it.
+**The onboarding card is state-bound, never timed.** It completes when every adopted harness reaches a terminal state (usable, authenticated, or installed-with-next-action), each badge carrying its next-action affordance; a stuck probe shows its stale-age retry line. No timer advances it.
 
 **The design pass is the pixels authority** (Agent auth system redesign, 2026-08-26): the exclusive-route header — exactly one route active per single-source harness, **configuring never switches** (saving material is a vault write; the explicit "Use this" action is the selection write, shown as row-level Applying until the ack) · the Claude.ai logins section (per-seat email + plan, 5h/7d meters with the binding window emphasized and warning at ≥75%, serving-now/next-up tags, the rotate switch, inline add → waiting-for-sign-in row) · the multi-key list with one "delivering" key · the install gate replaced by an in-structure Runtime row that hands over to Authentication when ready · the restart-sessions offer as an inline banner (pending founder sign-off — the settled copy was ruled as a modal). Where design and spec conflict on pixels, the design wins; where the design implies data (next-up, meters), this spec names the source. (The same zip's committed Models section — flat list, capability tags, live refresh states — is the launch-options surface: harnesses' pass carries it, [launch-options.md](../harnesses/launch-options.md).)
 
@@ -680,17 +701,16 @@ Cell-local invariants: the status document renders verbatim (no local fallback, 
 
 | This spec says | Prod today | The change |
 | --- | --- | --- |
-| Refusals name their cause in words | An unfunded org renders present-but-empty → launches fail as bare `AGENT_ROUTE_SELECTION_MISSING`. Confirmed live: the signup grant simply never ran for this account (no allocation row was ever created — the signup-hook miss is an open ai_gateway gap), leaving the ledger at $0 | **Funded 2026-08-26** ($25 admin grant via a one-off ECS task; `creditsExhausted` false, keys render again). Slice 1 gives the launch refusal plain-words copy naming the cause family and the action; remaining: the typed per-cause reasons (status module) |
+| Refusals name their cause in words | An unfunded org renders present-but-empty → launches fail as bare `AGENT_ROUTE_SELECTION_MISSING`. Confirmed live: the signup grant simply never ran for this account (its identity's free-credit allocation was stranded on a deleted account's orphaned org — found, fixed, and guarded in ai_gateway slice 5), leaving the ledger at $0 | **Funded 2026-08-26** ($25 admin grant via a one-off ECS task; `creditsExhausted` false, keys render again). Slice 1 gives the launch refusal plain-words copy naming the cause family and the action; remaining: the typed per-cause reasons (status module) |
 | Selections deliver with cloud gone | Delivery was gated on cloud compute until #2245; the first un-gated delivery applied the fail-closed unfunded doc — why "gateway broke" this week | Landed (#2245); the funding row clears the visible breakage |
 | Vault kinds include `anthropic_subscription`; the wire has a `seat` source | Three kinds; two source kinds | **Landed (slice 1, mint & run)**: the enum values, `seats.py`, the pool-expanding renderer arm, and the claude seat recipe ship |
 | Probe engine self-recovers (`BackoffExpired`, `FirstDetected`); status served stale-marked | Closed event set with no self-recovery; a missed probe darkens the harness until manual retry | Two new events + serve-stale store |
 | `status/` is the single machine truth; the frontend derives nothing | `agent-auth-evidence.ts` re-derives state client-side; `auth_state.rs` ships beside the legacy ladder | The status module absorbs the derivation; the evidence file is deleted |
 | `seat_usage_sample` + the usage probe + meters | — | **Landed (slice 4, meters)**: the table, the probe loop (`seats.py` / `seat_usage_probe`, active/idle cadence + failure backoff, 30-day prune), `GET /seats/usage` + the pane-open refresh, and the per-seat 5h/7d pane meters |
-| ai_gateway is its own folder and spec | Gateway code co-resident in `server/agent_auth/` and `db/store/agent_gateway/`; its spec was `model-gateway.md` in this folder | Spec moved to [ai_gateway](../ai_gateway/README.md) (this PR); the code split rides the build list |
 | The runtime cell lives in `domains/agent_auth/` | `route_auth/`, `auth/`, `auth_state.rs`, `launch_probe/` sit inside `domains/agents/`; no `status/` module exists (`auth_state.rs` carries the derivation) | Wave-3 move + the status module |
-| `server/agent_auth/` holds only agent_auth files; `seats.py` exists | Nine ai_gateway files co-resident (api.py also hosts the /agent-gateway routes; budget.py consumed at render); no seats.py | The ai_gateway code split + seats v1 |
+| `server/agent_auth/` holds only agent_auth files; `seats.py` exists | The ai_gateway code split landed (slice 5): `server/agent_auth/` holds only agent_auth files; seats v1's `seats.py` landed (slice 1) | **Landed** (the split: slice 5; `seats.py`: slice 1, mint & run) |
 | Seat minting works end to end | `claude setup-token` proven by hand (2026-08-26): headless and interactive launch on a fresh dir; usage headers confirmed on a plain 1-token request | **Landed (slice 1)**: the mint-terminal variant, the in-memory capture (wiped on handoff and every abort), the one-time claim handoff, and the courier's one-POST vault upload |
-| Grok authenticates, or doesn't offer login | The registry declares `grok login` AND a managed install — but the managed artifact is the ACP sidecar (`grok-launcher`), grok has no native artifact, and login resolution searches native → managed `grok` → PATH, so every rung misses | Ship the vendor `grok` CLI in the managed install (or teach login resolution the launcher name), or drop the login declaration |
+| Grok authenticates, or doesn't offer login | The vendor CLI was always in the managed tree (`npm install --prefix agent_process @xai-official/grok` writes `node_modules/.bin/grok`, the same binary as the ACP sidecar, whose `login` subcommand offers `--oauth`/`--device-auth` and writes the `~/.grok/auth.json` our discovery reads); login resolution's npm rung searched only the pre-lockfile `registry_npm/` layout, so every rung missed | Slice 6a: resolution gained the current managed-npm rung (`agent_process/node_modules/.bin/<program>`, pinned by a resolution test); the launcher (`grok-launcher`, baked `agent stdio` args) is deliberately NOT a login rung; the login declaration stays. In-product authentication awaits the slice-6 acceptance gate |
 | The headless ladder exists | Selections are per-user only; org policy only restricts | Creator-credentials at v1; org default when the first team org lands (ruled 2026-08-26) |
 | `surface` stays in the schema; the API defaults it to `local` and the UI never shows it until cloud machines return | `?surface=` is a live parameter on every route; cloud rows may exist from the pre-cull era | Default the parameter, hide the dimension, keep the column (ruled 2026-08-26) |
 | Delivery ordered by `sequence`, content identified by `fingerprint` (rider-only) | `revision` is one ms-epoch number doing both jobs, in-document; `acked_revision` is the ack column | Rename revision → sequence in the document AND the contract fixture; rename `acked_revision` → `acked_sequence`; drop the equal-revision clause; the launch-options basis stops folding the global document revision (`launch_options/basis.rs:67-72` — today every push invalidates every harness's options) |
@@ -699,10 +719,13 @@ Cell-local invariants: the status document renders verbatim (no local fallback, 
 | Probe events gain `BackoffExpired`, `FirstDetected`, and a changed-set on `AuthApplied` | `PokeReason` is Startup · InstallCompleted · AuthApplied (widest apply) · LoginTerminal · LiveContradiction · Manual | Two new variants + per-harness targeting |
 | `methods()` availability computes from the applied document only | No methods door exists; org policy and enrollment sync are server-only facts | Ruled: policy gates writes and render, never runtime availability — no policy rider needed |
 | Login terminals are single-flight per harness (mint) | The service spawns a new terminal unconditionally | **Landed (slice 1)**: the mint guard — a second mint returns (focuses) the open terminal |
-| Zero rows = unconfigured, with a migration for today's native users | Zero rows = native and the harness launches on its own login — retiring the convention converts working native setups into refusals | Cutover ships the status-document detection + mint offer first; existing native harnesses get a one-time settings prompt, and until acted on launches keep native behavior behind a legacy flag the migration removes — the exact bridge UX is the design pass's call |
+| Absent-harness resolution is detection-aware: no selection row + a detected working native login launches natively, permanently; no selection row + no detected native auth refuses in plain words | Zero rows = native for every harness, detected or not (`route_auth::ABSENT_HARNESS_POLICY` is `Native`; an unconfigured harness with no native auth dies on a cryptic vendor error); the slice-6a bridge machinery is in — the one-time seed pass records detected native logins in `agent-auth/native-bridge.json`, every launch-path and probe resolution goes through `resolve_profile_bridged` (fails open on an unmigrated machine), and acting (a document naming the harness, or the prompt's dismiss via `DELETE /v1/agent-auth/native-bridge/{kind}`) removes the flag | Ruled 2026-08-27: **the refusal cutover is cancelled** — `ABSENT_HARNESS_POLICY` never flips to `Refuse` wholesale, and native auth is permanent. Absent-harness resolution becomes detection-aware, so typed refusals reach only harnesses that today get the cryptic vendor error — strictly an improvement, never a break. The bridge machinery is downgraded to transitional belt-and-suspenders, retired at convergence (the cleanup also deletes leftover flag files); the perpetual-seeding question is moot. The prompt becomes a nudge (copy revisited in the UX slice); org policy's `native` value is the knob for teams that want to force managed auth |
 | One ack row per (user, surface) | Same | v1 explicitly assumes one machine per surface; multi-desktop reconciliation rides the environments rebuild |
 | `org_agent_policy` gains `seat` in the allowed-routes vocabulary | Vocabulary is {gateway, api_key, native} | **Landed (slice 1)**: `seat` rides the policy-routes vocabulary |
 | The status document replaces `authState` on the agents projection | `authState` ships beside the legacy ladder fields | Replace the field; `credentialState`/`readiness` stay harnesses' |
+| Who may import this system is machine-pinned per the enforcement table | Server side landed (slice 5): `lints/server/fences.toml` held by [scripts/check_server_fences.py](../../../scripts/check_server_fences.py) (SRV-FENCE-001) and the `NamedStoreBoundary` locks on the vault + selection stores (SRV-STORE-8). Rust: still fenced only as part of the `agents` domain (coarse — the checker can't tell a consumer of `launch_facts` from one poking mint internals) | The `agent_auth` fence node with its pinned edge list rides Wave 3 — and at that convergence the Doors consumer lists reconcile with measured reality (#2289 F6): `launch_options` is a real consumer to add (post-rework it calls the top-level `current_server_origin`/`load_effective_state`), and the other measured non-seam sites — `agents/runtime.rs`'s facade delegation, `readiness/service.rs`'s detection imports, `installer/reconcile/execution.rs`'s probe poke, and the sessions launch-path files beyond the two named — are reconciled deliberately (moved behind doors, or admitted to the list) |
+| The status document carries a lineage identity; the server persists the current lineage per (user, surface) and rejects a push from any other lineage | No lineage exists — nothing distinguishes a reinstalled machine's delayed push from the live one | Slice 3 (ruled 2026-08-27): the lineage identity, the typed reject, and the "reset this machine" recovery action |
+| The onboarding card is state-bound, never timed | The auth-setup step polls `applied` acks for a ~20 s grace window (`AUTH_SETUP_GRACE_MS`), then auto-advances | Retired with slice 3 (ruled 2026-08-27): the card binds to the status document and advances only on real completion |
 
 Carried, still true in prod (not deltas): the origin guard · only-forward acks · the contract fixture pin · the per-harness recipes and ambient sanitization · the restart-running-sessions offer after an applied auth change · the registry mirror drift tests · opencode's per-slot detector gap · the `azure_openai` cells pending live verification for codex and claude · native-auth harness settings never reaching the runtime (the settings rider covers the pane, not the launch) · cursor's native credential is detected from `~/.cursor/cli-config.json` (a file — the registry's `cursor-keychain` discovery name is historical).
 
@@ -718,6 +741,8 @@ Carried, still true in prod (not deltas): the origin guard · only-forward acks 
     - [x] the usage probe + `seat_usage_sample` + settings meters (row 8) — **slice 4 (meters) landed**
 - [ ] Alongside, not gating: content-hash revision + content-hash launch-options basis + probe recovery events + serve-stale status (rows 5, 6)
 - [ ] The API defaults `surface` to `local`; the column stays for cloud's return (ruled 2026-08-26)
-- [ ] ai_gateway code split out of `server/agent_auth/`; recompose the remainder (row 9)
-- [ ] Grok: a managed install recipe, or drop CLI-login from its catalog entry (row 12)
+- [x] ai_gateway code split out of `server/agent_auth/`; recompose the remainder — landed (slice 5)
+- [x] Grok login resolves the managed vendor CLI (slice 6a) — the npm rung learned the current `agent_process/node_modules/.bin/` layout; declaration kept (row 12)
+- [x] Env-passthrough retired (slice 6a, spec decision "Does env-var passthrough survive as a method?" → delete): the selection-write validator refuses an api_key source without a vault reference in plain words, and the `retire_env_passthrough_selections` migration deletes any drifted rows and re-asserts the shape CHECK (prod audited 2026-08-27: zero such rows)
+- [ ] Fence teeth (the enforcement table, last delta row): `NamedStoreBoundary` locks for the vault + selection stores — **done (slice 5, SRV-STORE-8)** · `lints/server/fences.toml` with the ai_gateway split — **done (slice 5, SRV-FENCE-001)** · the `agent_auth` fence node at Wave 3 — open
 - [ ] Wave 3: the Rust consolidation (row 10) · Phase 2: codex seats (refreshing-file shape, single lease, sync-back)

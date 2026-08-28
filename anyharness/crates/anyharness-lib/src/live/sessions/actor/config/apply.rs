@@ -62,6 +62,7 @@ pub(in crate::live::sessions::actor) async fn try_apply_model_preference(
     apply_model_via_direct_setter(conn, native_session_id, startup_state, desired_model_id).await
 }
 
+#[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
 pub(in crate::live::sessions::actor) async fn try_apply_config_option(
     conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,

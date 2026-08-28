@@ -17,7 +17,7 @@ use super::{
 
 const VERIFY_CHUNK_BYTES: usize = 65_536;
 
-pub(super) trait ReconcileHooks {
+pub(crate) trait ReconcileHooks {
     fn now(&mut self) -> Instant;
     fn read(&mut self, file: &mut File, destination: &mut [u8]) -> io::Result<usize>;
 }

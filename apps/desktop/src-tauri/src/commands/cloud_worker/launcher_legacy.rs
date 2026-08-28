@@ -77,8 +77,8 @@ impl fmt::Display for WorkerLauncher {
 pub(super) enum LegacyOverrideRejection {}
 
 impl LegacyOverrideRejection {
-    pub(super) fn as_str(self) -> &'static str {
-        match self {}
+    pub(super) fn as_str(&self) -> &'static str {
+        match *self {}
     }
 }
 
@@ -162,7 +162,7 @@ fn development_worker_candidates() -> Vec<PathBuf> {
         for profile in ["debug", "release"] {
             candidates.push(
                 repo.join("target")
-                    .join(&target)
+                    .join(target)
                     .join(profile)
                     .join("proliferate-worker"),
             );
@@ -201,7 +201,7 @@ mod tests {
             || Some(WorkerLauncher::Binary(PathBuf::from("/scanned"))),
         );
         assert!(
-            matches!(selected, Some(WorkerLauncher::Binary(path)) if path == PathBuf::from("/explicit"))
+            matches!(selected, Some(WorkerLauncher::Binary(path)) if path == Path::new("/explicit"))
         );
 
         let selected = select_worker_launcher(

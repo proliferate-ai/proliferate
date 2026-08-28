@@ -299,11 +299,7 @@ class LiveDomainStoreLinePassTest(BoundaryRuleTestCase):
     def test_live_use_line_is_not_double_counted(self) -> None:
         # The import pass already counts this statement; the line pass must not.
         violations = self.run_rules(
-            {
-                "live/sessions/probe.rs": (
-                    "use crate::domains::sessions::store::SessionStore;\n"
-                )
-            }
+            {"live/sessions/probe.rs": ("use crate::domains::sessions::store::SessionStore;\n")}
         )
 
         self.assertEqual(len(self.for_rule(violations, "AH-STORE-4")), 1)
@@ -312,9 +308,7 @@ class LiveDomainStoreLinePassTest(BoundaryRuleTestCase):
         violations = self.run_rules(
             {
                 "live/sessions/driver/mod.rs": (
-                    "fn drive(facts: LaunchBundle) {\n"
-                    "    facts.apply();\n"
-                    "}\n"
+                    "fn drive(facts: LaunchBundle) {\n    facts.apply();\n}\n"
                 )
             }
         )
@@ -362,11 +356,7 @@ class DomainValveLiveReexportTest(BoundaryRuleTestCase):
     def test_private_use_in_valve_passes(self) -> None:
         # Holding the power is the valve's whole job; only republishing is banned.
         violations = self.run_rules(
-            {
-                "domains/sessions/runtime.rs": (
-                    "use crate::live::sessions::LiveSessionManager;\n"
-                )
-            }
+            {"domains/sessions/runtime.rs": ("use crate::live::sessions::LiveSessionManager;\n")}
         )
 
         self.assertEqual(self.for_rule(violations, "AH-LIVE-6"), [])
@@ -457,19 +447,13 @@ class DomainValveLiveReexportTest(BoundaryRuleTestCase):
                     }
                 )
 
-                self.assertEqual(
-                    len(self.for_rule(violations, "AH-LIVE-6")), 1
-                )
+                self.assertEqual(len(self.for_rule(violations, "AH-LIVE-6")), 1)
 
     def test_non_valve_domain_file_is_not_checked_by_this_rule(self) -> None:
         # A non-valve file re-exporting live is already a AH-LIVE-5 hit;
         # this rule exists for the files that rule cannot see.
         violations = self.run_rules(
-            {
-                "domains/sessions/hooks.rs": (
-                    "pub use crate::live::sessions::LiveSessionManager;\n"
-                )
-            }
+            {"domains/sessions/hooks.rs": ("pub use crate::live::sessions::LiveSessionManager;\n")}
         )
 
         self.assertEqual(self.for_rule(violations, "AH-LIVE-6"), [])
@@ -481,9 +465,7 @@ class PolicyPurityTest(BoundaryRuleTestCase):
         violations = self.run_rules(
             {
                 "domains/workspaces/retention_policy.rs": (
-                    "fn decide() -> String {\n"
-                    "    chrono::Utc::now().to_rfc3339()\n"
-                    "}\n"
+                    "fn decide() -> String {\n    chrono::Utc::now().to_rfc3339()\n}\n"
                 )
             }
         )
@@ -573,21 +555,15 @@ class PolicyPurityTest(BoundaryRuleTestCase):
     def test_suffix_policy_files_still_matched(self) -> None:
         violations = self.run_rules(
             {
-                "domains/workspaces/retention_policy.rs": (
-                    "let now = chrono::Utc::now();\n"
-                ),
-                "domains/agents/installer/install_policy.rs": (
-                    "let id = Uuid::new_v4();\n"
-                ),
+                "domains/workspaces/retention_policy.rs": ("let now = chrono::Utc::now();\n"),
+                "domains/agents/installer/install_policy.rs": ("let id = Uuid::new_v4();\n"),
             }
         )
 
         self.assertEqual(len(self.for_rule(violations, "AH-POLICY-1")), 2)
 
     def test_policy_rs_outside_domains_is_not_checked(self) -> None:
-        violations = self.run_rules(
-            {"adapters/git/policy.rs": "let now = chrono::Utc::now();\n"}
-        )
+        violations = self.run_rules({"adapters/git/policy.rs": "let now = chrono::Utc::now();\n"})
 
         self.assertEqual(self.for_rule(violations, "AH-POLICY-1"), [])
 
@@ -634,8 +610,7 @@ class DomainStoreImportTest(BoundaryRuleTestCase):
         violations = self.run_rules(
             {
                 "domains/plans/store.rs": (
-                    "use crate::domains::plans::model::PlanRecord;\n"
-                    "use crate::persistence::Db;\n"
+                    "use crate::domains::plans::model::PlanRecord;\nuse crate::persistence::Db;\n"
                 )
             }
         )
@@ -675,11 +650,7 @@ class DomainContractImportTest(BoundaryRuleTestCase):
         # inline pass fire on line 2 while the import pass fired on line 1,
         # counting one import twice.
         violations = self.run_rules(
-            {
-                "domains/goals/runtime.rs": (
-                    "use {\n    anyharness_contract::v1::Goal,\n};\n"
-                )
-            }
+            {"domains/goals/runtime.rs": ("use {\n    anyharness_contract::v1::Goal,\n};\n")}
         )
 
         matches = self.for_rule(violations, "AH-CONTRACT-1")
@@ -688,11 +659,7 @@ class DomainContractImportTest(BoundaryRuleTestCase):
 
     def test_root_brace_group_pub_use_counts_once(self) -> None:
         violations = self.run_rules(
-            {
-                "domains/goals/runtime.rs": (
-                    "pub use {\n    anyharness_contract::v1::Goal,\n};\n"
-                )
-            }
+            {"domains/goals/runtime.rs": ("pub use {\n    anyharness_contract::v1::Goal,\n};\n")}
         )
 
         self.assertEqual(len(self.for_rule(violations, "AH-CONTRACT-1")), 1)
@@ -731,17 +698,11 @@ class DomainContractImportTest(BoundaryRuleTestCase):
         # A single line can legitimately trigger both the narrow legacy rule and
         # the broad new one.
         violations = self.run_rules(
-            {
-                "domains/goals/runtime.rs": (
-                    "use anyharness_contract::v1::SetSessionGoalRequest;\n"
-                )
-            }
+            {"domains/goals/runtime.rs": ("use anyharness_contract::v1::SetSessionGoalRequest;\n")}
         )
 
         self.assertEqual(len(self.for_rule(violations, "AH-CONTRACT-1")), 1)
-        self.assertEqual(
-            len(self.for_rule(violations, "AH-CONTRACT-2")), 1
-        )
+        self.assertEqual(len(self.for_rule(violations, "AH-CONTRACT-2")), 1)
 
     def test_contract_import_outside_domains_passes(self) -> None:
         violations = self.run_rules(
@@ -793,22 +754,14 @@ class DomainContractImportTest(BoundaryRuleTestCase):
     def test_use_line_is_not_double_counted_by_the_line_pass(self) -> None:
         # The use-statement pass already counts this; the inline pass must skip it.
         violations = self.run_rules(
-            {
-                "domains/goals/model.rs": (
-                    "use anyharness_contract::v1::GoalRecord;\n"
-                )
-            }
+            {"domains/goals/model.rs": ("use anyharness_contract::v1::GoalRecord;\n")}
         )
 
         self.assertEqual(len(self.for_rule(violations, "AH-CONTRACT-1")), 1)
 
     def test_pub_use_contract_reexport_is_not_double_counted(self) -> None:
         violations = self.run_rules(
-            {
-                "domains/goals/wire.rs": (
-                    "pub use anyharness_contract::v1::GoalRecord;\n"
-                )
-            }
+            {"domains/goals/wire.rs": ("pub use anyharness_contract::v1::GoalRecord;\n")}
         )
 
         self.assertEqual(len(self.for_rule(violations, "AH-CONTRACT-1")), 1)
@@ -817,10 +770,7 @@ class DomainContractImportTest(BoundaryRuleTestCase):
         violations = self.run_rules(
             {
                 "domains/goals/model.rs": (
-                    "use anyharness_contract::v1::{\n"
-                    "    GoalRecord,\n"
-                    "    GoalStatus,\n"
-                    "};\n"
+                    "use anyharness_contract::v1::{\n    GoalRecord,\n    GoalStatus,\n};\n"
                 )
             }
         )
@@ -842,11 +792,7 @@ class DomainContractImportTest(BoundaryRuleTestCase):
 
     def test_inline_contract_path_outside_domains_passes(self) -> None:
         violations = self.run_rules(
-            {
-                "api/http/goals.rs": (
-                    "fn map(record: anyharness_contract::v1::GoalRecord) {}\n"
-                )
-            }
+            {"api/http/goals.rs": ("fn map(record: anyharness_contract::v1::GoalRecord) {}\n")}
         )
 
         self.assertEqual(self.for_rule(violations, "AH-CONTRACT-1"), [])
@@ -1023,8 +969,7 @@ class DomainSqlOutsideStoreTest(BoundaryRuleTestCase):
         violations = self.run_rules(
             {
                 "domains/workflows/service.rs": (
-                    '    const KEYWORD: &str = "SELECT";\n'
-                    '    #[serde(rename = "SELECT")]\n'
+                    '    const KEYWORD: &str = "SELECT";\n    #[serde(rename = "SELECT")]\n'
                 )
             }
         )
@@ -1035,11 +980,7 @@ class DomainSqlOutsideStoreTest(BoundaryRuleTestCase):
         # The exclusion must stay narrow: `"SELECT "` with trailing space is a
         # real query being concatenated, so it must keep matching.
         violations = self.run_rules(
-            {
-                "domains/workflows/service.rs": (
-                    '    let sql = "SELECT ".to_string() + &columns;\n'
-                )
-            }
+            {"domains/workflows/service.rs": ('    let sql = "SELECT ".to_string() + &columns;\n')}
         )
 
         self.assertEqual(len(self.for_rule(violations, "AH-STORE-3")), 1)
@@ -1076,9 +1017,7 @@ class DomainSqlOutsideStoreTest(BoundaryRuleTestCase):
         violations = self.run_rules(
             {
                 "domains/workflows/service.rs": (
-                    "    /*\n"
-                    "     * SELECT * FROM workflow_runs WHERE id = ?1\n"
-                    "     */\n"
+                    "    /*\n     * SELECT * FROM workflow_runs WHERE id = ?1\n     */\n"
                 )
             }
         )
@@ -1094,9 +1033,7 @@ class ExceptionLedgerTest(unittest.TestCase):
     tolerance is granted to a named site and to nothing else.
     """
 
-    def violation(
-        self, rule_id: str, path: str, lineno: int, site: str
-    ) -> check_module.Violation:
+    def violation(self, rule_id: str, path: str, lineno: int, site: str) -> check_module.Violation:
         return check_module.Violation(rule_id, Path(path), lineno, site, "seeded")
 
     def ledger(self, *rows: tuple[str, str, str]) -> dict[str, set[tuple[str, str]]]:
@@ -1156,17 +1093,15 @@ class ExceptionLedgerTest(unittest.TestCase):
 
         failures, stale = check_module.apply_exceptions(violations, ledger)
 
-        self.assertEqual([violation.site for violation in failures], [
-            "fn resume::crate::live::terminals"
-        ])
+        self.assertEqual(
+            [violation.site for violation in failures], ["fn resume::crate::live::terminals"]
+        )
         self.assertEqual(len(stale), 1)
         self.assertIn("fn start::crate::live::terminals", stale[0])
 
     def test_unexcused_rule_fails(self) -> None:
         rel = "anyharness/crates/anyharness-lib/src/api/http/hosting.rs"
-        violations = [
-            self.violation("AH-API-2", rel, 1, "fn create::WorkspaceStore::new")
-        ]
+        violations = [self.violation("AH-API-2", rel, 1, "fn create::WorkspaceStore::new")]
 
         failures, stale = check_module.apply_exceptions(violations, {})
 
@@ -1296,9 +1231,7 @@ class ShippedLedgerTest(unittest.TestCase):
         """
         violations = check_module.collect_violations()
         flagged = {
-            violation.relative_path
-            for violation in violations
-            if violation.rule_id == "AH-LIVE-5"
+            violation.relative_path for violation in violations if violation.rule_id == "AH-LIVE-5"
         }
         prefix = "anyharness/crates/anyharness-lib/src"
 
@@ -1335,27 +1268,30 @@ class ShippedLedgerTest(unittest.TestCase):
             # differs per rung if later rungs edit the file; each rung's branch
             # pins its own value. AH-STORE-3 is this branch's record id for the
             # rule main's ledger names DOMAIN_SQL_OUTSIDE_STORE.
-            ("AH-STORE-3",
-             "domains/workflows/policy.rs", 35,
-             "bare SELECT head, FROM on the next line"),
+            (
+                "AH-STORE-3",
+                "domains/workflows/policy.rs",
+                35,
+                "bare SELECT head, FROM on the next line",
+            ),
             # A DROP TABLE line, inside a cfg(test) mod the engine cannot see
             # past — the checker still flags the line itself. Carried forward
             # 324 -> 332 as the archiving rungs grew the file above it (R1's
             # retired-arm absorption, R4's WorkspaceArchived rename and its
-            # archived-row admission tests); the offender and the rule that
-            # sees it are unchanged. The anchor differs per rung because later
-            # rungs edit the file, so each rung's branch pins its own value and
-            # the restack takes each rung's own number on the one-line conflict.
-            ("AH-STORE-3", "domains/workspaces/access_gate.rs", 332,
-             "DROP TABLE line"),
+            # archived-row admission tests), then 332 -> 331 when the 2026-08-27
+            # rustfmt normalization compacted a wrap above it; the offender and
+            # the rule that sees it are unchanged. The anchor differs per rung
+            # because later rungs edit the file, so each rung's branch pins its
+            # own value and the restack takes each rung's own number on the
+            # one-line conflict.
+            ("AH-STORE-3", "domains/workspaces/access_gate.rs", 331, "DROP TABLE line"),
             # A `state.*_store` field access, which carries no store type on the
             # line for the import pass to see. This particular one is benign (an
             # in-memory health snapshot), but the shape is what the rule watches.
             ("AH-API-2", "api/http/health.rs", 37, "AppState store field"),
             # An inline contract path with no use statement to declare it.
             # Carried 75 -> 98 when prompt-visibility lookup moved it down.
-            ("AH-CONTRACT-1", "domains/sessions/store/events.rs", 98,
-             "inline contract path"),
+            ("AH-CONTRACT-1", "domains/sessions/store/events.rs", 98, "inline contract path"),
             # AH-POLICY-1's real-repo anchor (gen-1's store-holding
             # workflows/control/policy.rs) was deleted with the gen-1 domain
             # (workflows gen-2 PR1) and no real offender remains: the gen-2
@@ -1372,11 +1308,7 @@ class ShippedLedgerTest(unittest.TestCase):
         violations = check_module.collect_violations()
 
         self.assertEqual(
-            [
-                violation.format()
-                for violation in violations
-                if violation.rule_id == "AH-LIVE-6"
-            ],
+            [violation.format() for violation in violations if violation.rule_id == "AH-LIVE-6"],
             [],
         )
 

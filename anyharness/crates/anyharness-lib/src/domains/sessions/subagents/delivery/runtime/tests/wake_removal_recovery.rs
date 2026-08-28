@@ -4,7 +4,7 @@ use super::*;
 
 #[tokio::test(flavor = "current_thread")]
 async fn mixed_message_suppression_retries_retired_wake_removal_after_restart() {
-    let _lock = test_support::lock_env();
+    let _lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let state = subagent_with_captured_completion().await;

@@ -24,7 +24,11 @@ pub struct SessionActivity {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
-#[serde(tag = "status", rename_all = "snake_case", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "status",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum TurnState {
     Running {
         // Explicit field renames: `rename_all_fields = "camelCase"` governs the
@@ -62,7 +66,11 @@ pub struct ActivityProcess {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(tag = "status", rename_all = "snake_case", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "status",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum ProcessStatus {
     Running,
     Exited {
@@ -96,7 +104,11 @@ pub struct ActivitySubagent {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
-#[serde(tag = "status", rename_all = "snake_case", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "status",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum SubagentStatus {
     Running,
     Completed {
@@ -199,9 +211,6 @@ mod tests {
             agents: Vec::new(),
         };
         let json = serde_json::to_value(&activity).expect("serialize session activity");
-        assert_eq!(
-            json,
-            serde_json::json!({ "turn": { "status": "idle" } })
-        );
+        assert_eq!(json, serde_json::json!({ "turn": { "status": "idle" } }));
     }
 }

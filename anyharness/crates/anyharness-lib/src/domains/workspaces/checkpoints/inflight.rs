@@ -38,7 +38,10 @@ pub struct InFlightRevertGuard {
 
 impl Drop for InFlightRevertGuard {
     fn drop(&mut self) {
-        let mut state = self.state.lock().expect("checkpoint in-flight map poisoned");
+        let mut state = self
+            .state
+            .lock()
+            .expect("checkpoint in-flight map poisoned");
         if let Some(count) = state.ids.get_mut(&self.checkpoint_id) {
             *count = count.saturating_sub(1);
             if *count == 0 {
@@ -52,7 +55,10 @@ impl InFlightReverts {
     /// Claim `checkpoint_id` for an in-flight revert. Re-entrant: a second claim
     /// of the same id increments the count.
     pub fn claim(&self, checkpoint_id: &str) -> InFlightRevertGuard {
-        let mut state = self.state.lock().expect("checkpoint in-flight map poisoned");
+        let mut state = self
+            .state
+            .lock()
+            .expect("checkpoint in-flight map poisoned");
         *state.ids.entry(checkpoint_id.to_string()).or_insert(0) += 1;
         InFlightRevertGuard {
             state: self.state.clone(),

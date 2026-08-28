@@ -25,7 +25,7 @@ use crate::persistence::Db;
 
 #[tokio::test(flavor = "current_thread")]
 async fn actor_unavailable_after_capture_discards_checkpoint_and_attachments() {
-    let _capture = EnvGuard::on();
+    let _capture = EnvGuard::on().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("checkpoint-actor-unavailable");
@@ -152,7 +152,7 @@ async fn actor_unavailable_after_capture_discards_checkpoint_and_attachments() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn response_dropped_after_capture_retains_an_unresolved_checkpoint() {
-    let _capture = EnvGuard::on();
+    let _capture = EnvGuard::on().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("checkpoint-response-dropped");
@@ -194,7 +194,6 @@ async fn response_dropped_after_capture_retains_an_unresolved_checkpoint() {
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
             )
-            .map_err(Into::into)
         })
         .expect("read unresolved checkpoint");
     assert_eq!(expired_at, None, "ambiguous acknowledgement retains bytes");
@@ -218,7 +217,7 @@ async fn response_dropped_after_capture_retains_an_unresolved_checkpoint() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn started_after_capture_binds_the_real_turn_boundary() {
-    let _capture = EnvGuard::on();
+    let _capture = EnvGuard::on().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("checkpoint-started");
@@ -273,7 +272,7 @@ async fn started_after_capture_binds_the_real_turn_boundary() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn rejected_after_capture_discards_the_provenance_checkpoint() {
-    let _capture = EnvGuard::on();
+    let _capture = EnvGuard::on().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("checkpoint-rejected");
@@ -323,7 +322,7 @@ async fn rejected_after_capture_discards_the_provenance_checkpoint() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn flag_off_dispatch_never_touches_checkpoint_storage_or_git() {
-    let _capture = EnvGuard::off();
+    let _capture = EnvGuard::off().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("checkpoint-flag-off");
@@ -369,7 +368,7 @@ async fn flag_off_dispatch_never_touches_checkpoint_storage_or_git() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn live_busy_sibling_keeps_writing_while_capture_records_one_complete_version() {
-    let _capture = EnvGuard::on();
+    let _capture = EnvGuard::on().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("checkpoint-busy-sibling");
@@ -414,7 +413,7 @@ async fn live_busy_sibling_keeps_writing_while_capture_records_one_complete_vers
         let mut iteration = 0usize;
         while !writer_stop.load(Ordering::Acquire) {
             let staged = writer_workspace.with_file_name("checkpoint-writer-staged");
-            let bytes = if iteration % 2 == 0 {
+            let bytes = if iteration.is_multiple_of(2) {
                 &writer_a
             } else {
                 &writer_b
@@ -525,7 +524,6 @@ fn only_checkpoint(state: &AppState) -> (String, Option<String>) {
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
-            .map_err(Into::into)
         })
         .expect("read checkpoint")
 }

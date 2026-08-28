@@ -20,7 +20,7 @@ const INVALID_DESTINATION_WORKSPACE_ID: &str = "mobility-wake-invalid-destinatio
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cowork_wake_schedule_survives_preflight_export_and_install_while_subagent_is_denied() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let source_home = temp_runtime_home("cowork-wake-mobility");

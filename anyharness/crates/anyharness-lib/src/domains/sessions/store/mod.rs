@@ -38,6 +38,7 @@ impl SessionStore {
         Self { db }
     }
 
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn db(&self) -> Db {
         self.db.clone()
     }
@@ -61,9 +62,8 @@ pub(crate) fn with_launch_admission_tx<T>(
         // they changed during admission, the second validation fails and the
         // whole session/intent unit rolls back.
         let opening_basis = basis_revision();
-        let validated =
-            validate_selection_in_conn(conn, harness_kind, &opening_basis, selection)
-                .map_err(anyhow::Error::new)?;
+        let validated = validate_selection_in_conn(conn, harness_kind, &opening_basis, selection)
+            .map_err(anyhow::Error::new)?;
         let inserted = insert(conn)?;
         let closing_basis = basis_revision();
         validate_selection_in_conn(conn, harness_kind, &closing_basis, selection)

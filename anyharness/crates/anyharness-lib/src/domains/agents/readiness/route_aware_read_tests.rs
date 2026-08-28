@@ -30,7 +30,7 @@ use crate::integrations::agent_cli::executable::make_executable;
 struct CredentialGapWorld {
     runtime_home: PathBuf,
     empty_home: PathBuf,
-    _env: std::sync::MutexGuard<'static, ()>,
+    _env: tokio::sync::MutexGuard<'static, ()>,
     _program: EnvVarGuard,
     _home: EnvVarGuard,
     _xai: EnvVarGuard,
@@ -39,7 +39,7 @@ struct CredentialGapWorld {
 
 impl CredentialGapWorld {
     fn new(prefix: &str) -> Self {
-        let env = lock_env();
+        let env = lock_env_blocking();
         let runtime_home = make_temp_dir(prefix);
         let bin = runtime_home.join("grok-acp");
         std::fs::write(&bin, "#!/bin/sh\nexit 0\n").expect("write override binary");
@@ -152,8 +152,7 @@ fn route_upgraded_readiness_is_distinguishable_from_native_readiness() {
     // Launch resolution agrees (same upgrade path), and the unrouted projection
     // never claims a route.
     assert!(
-        resolve_launch_agent(&grok, &world.runtime_home, &BTreeMap::new())
-            .credentials_from_route
+        resolve_launch_agent(&grok, &world.runtime_home, &BTreeMap::new()).credentials_from_route
     );
     assert!(!resolve_agent_unrouted(&grok, &world.runtime_home).credentials_from_route);
 }
@@ -185,7 +184,7 @@ fn a_natively_ready_agent_is_never_flagged_as_route_sourced() {
 /// route.
 #[test]
 fn a_route_that_cannot_upgrade_does_not_claim_provenance() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let registry = built_in_registry();
     let claude = registry
         .into_iter()
@@ -242,7 +241,7 @@ fn the_settings_read_only_honors_this_harnesss_route() {
 #[test]
 fn the_settings_read_never_masks_a_missing_binary() {
     // Reads HOME (claude's local-auth discovery) — serialize with the guards.
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let registry = built_in_registry();
     let claude = registry
         .into_iter()
