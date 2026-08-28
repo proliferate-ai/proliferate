@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-08-20.1",
+  "catalogVersion": "2026-08-28.1",
   "probedAgainst": {
-    "registryVersion": "2026-08-20.1"
+    "registryVersion": "2026-08-28.1"
   },
   "generatedAt": "2026-08-17T20:49:16.584Z",
   "agents": [
