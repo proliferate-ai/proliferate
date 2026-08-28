@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   parseTranscriptVirtualizationMode,
   resolveTranscriptVirtualizationEnabled,
@@ -13,6 +13,11 @@ import { VirtualizedTranscriptRowList } from "./VirtualizedTranscriptRowList";
 
 const LEGACY_ENABLE_VIRTUALIZATION_STORAGE_KEY = "proliferate:enableTranscriptVirtualization";
 const LEGACY_DISABLE_VIRTUALIZATION_STORAGE_KEY = "proliferate:disableTranscriptVirtualization";
+// A confirmed blank range can still be a transient WebKit measurement state.
+// Keep the readable full renderer up briefly, then give a fresh virtualizer one
+// retry. A second failure remains on the safety renderer so a genuinely broken
+// range cannot flash between implementations forever.
+const VIRTUALIZER_FALLBACK_RETRY_DELAY_MS = 1_000;
 
 export function VirtualTranscriptRowList(props: TranscriptRowListBaseProps) {
   const { activeSessionId, selectedWorkspaceId } = props;
@@ -24,9 +29,26 @@ export function VirtualTranscriptRowList(props: TranscriptRowListBaseProps) {
     mode: virtualizationMode,
   });
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
+  const fallbackCountRef = useRef(0);
   useLayoutEffect(() => {
+    fallbackCountRef.current = 0;
     setFallbackReason(null);
   }, [activeSessionId, selectedWorkspaceId]);
+
+  const handleFallback = useCallback((reason: string) => {
+    fallbackCountRef.current += 1;
+    setFallbackReason(reason);
+  }, []);
+
+  useEffect(() => {
+    if (!virtualizationEnabled || fallbackReason === null || fallbackCountRef.current !== 1) {
+      return;
+    }
+    const retryTimer = window.setTimeout(() => {
+      setFallbackReason(null);
+    }, VIRTUALIZER_FALLBACK_RETRY_DELAY_MS);
+    return () => window.clearTimeout(retryTimer);
+  }, [fallbackReason, virtualizationEnabled]);
 
   if (!virtualizationEnabled || fallbackReason !== null) {
     return (
@@ -41,7 +63,7 @@ export function VirtualTranscriptRowList(props: TranscriptRowListBaseProps) {
   return (
     <VirtualizedTranscriptRowList
       {...props}
-      onFallback={setFallbackReason}
+      onFallback={handleFallback}
       virtualizationMode={virtualizationMode}
     />
   );
