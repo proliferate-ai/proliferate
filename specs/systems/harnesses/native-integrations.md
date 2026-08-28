@@ -116,6 +116,8 @@ One section in the **per-harness pane** (`/settings?section=agent-codex`, [Harne
 
 Every row is the existing settings vocabulary — `SettingsSection` over `RosterRow` (comfortable density) with `Badge` and `Switch` in the trailing slot — no new pattern.
 
+**Icons.** Leading marks come from the compiled-in registry in [IntegrationIcon.tsx](../../../apps/packages/product-client/src/components/settings/panes/integrations/IntegrationIcon.tsx), never from the vendor's plugin assets: the bundled plugins ship proprietary `app-icon.png` artwork under OpenAI's and Google's marks, and displaying it would also need a new runtime→client file-serving seam. Each curated bundle registers one Proliferate-drawn monochrome glyph in `primitives/icons/` (the `LinearGlyph` pattern, lucide-free per the glyph ratchet). Raw `mcp:*` rows render the registry's existing `Plug` fallback — the documented treatment for custom MCP definitions — because a config entry carries no icon metadata and matching a brand on its user-typed name would paint the wrong company's logo. Deterministic host-based matching for HTTP servers (`mcp.linear.app` → the Linear glyph) is a possible later enrichment, out of v1.
+
 ## Failure modes
 
 | Condition | Behavior | Recovers |
