@@ -19,7 +19,6 @@ use crate::domains::agents::model::{AgentKind, ResolvedAgent};
 
 use super::driver::process::spawn_agent_process;
 use super::driver::session_lifecycle::{initialize_connection, start_new_session};
-use super::driver::SessionMcpServer;
 
 mod config_options;
 use config_options::{
@@ -335,13 +334,12 @@ async fn run_enumeration(
         warnings.push("agent did not report agent_info at initialize".to_string());
     }
 
-    let mcp_servers: Vec<SessionMcpServer> = Vec::new();
     let new_session = start_new_session(
         conn,
         workspace,
-        &mcp_servers,
+        &[],
         None,
-        &std::collections::BTreeMap::new(),
+        &BTreeMap::new(),
         PROBE_SESSION_ID,
         PROBE_WORKSPACE_ID,
         "catalog_probe",

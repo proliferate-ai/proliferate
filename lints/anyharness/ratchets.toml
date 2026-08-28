@@ -80,7 +80,7 @@ reason = "R3 real-process stop suite; every case owns a real agent process and a
 
 [[max_lines]]
 path = "anyharness/crates/anyharness-lib/src/live/sessions/probe.rs"
-max_lines = 609
+max_lines = 608
 reason = "catalog probe with per-harness model-source fallbacks (+the three runtime-probe options: env removal, scratch workspace root, config-option-only switch suppression); shrank from 683 after readiness resolution and config-option model switching moved to owned seams"
 
 [[max_lines]]
