@@ -54,9 +54,7 @@ pub fn inspect_path(path: String) -> PathInspection {
 
 fn classify_path_inspection_error(kind: std::io::ErrorKind) -> PathInspection {
     match kind {
-        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory => {
-            PathInspection::Missing
-        }
+        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory => PathInspection::Missing,
         std::io::ErrorKind::PermissionDenied => PathInspection::Unavailable {
             reason: PathInspectionUnavailableReason::PermissionDenied,
         },
@@ -232,10 +230,7 @@ mod path_inspection_tests {
     fn path_inspection_serializes_the_exact_tagged_union() {
         let values = [
             (PathInspection::File, json!({"kind": "file"})),
-            (
-                PathInspection::Directory,
-                json!({"kind": "directory"}),
-            ),
+            (PathInspection::Directory, json!({"kind": "directory"})),
             (PathInspection::Missing, json!({"kind": "missing"})),
             (
                 PathInspection::Unavailable {
@@ -264,7 +259,10 @@ mod path_inspection_tests {
         ];
 
         for (value, expected) in values {
-            assert_eq!(serde_json::to_value(value).expect("serialize inspection"), expected);
+            assert_eq!(
+                serde_json::to_value(value).expect("serialize inspection"),
+                expected
+            );
         }
     }
 

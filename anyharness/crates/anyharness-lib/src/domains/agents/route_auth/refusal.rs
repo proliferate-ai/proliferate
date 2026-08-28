@@ -120,7 +120,11 @@ impl LaunchRefusal {
             } => Some(Self::AllSeatsCooling {
                 earliest_reset_epoch_s: *earliest_reset_epoch_s,
             }),
-            RouteAuthError::MalformedStateFile { .. }
+            // `NoConfiguredSource` stays outside the vocabulary map until the
+            // zero-rows cutover gives it a live producer (module doc above);
+            // the HTTP surface renders its own Display until then.
+            RouteAuthError::NoConfiguredSource { .. }
+            | RouteAuthError::MalformedStateFile { .. }
             | RouteAuthError::StaleStateSequence { .. }
             // Foreign lineage is a delivery refusal, not a launch refusal: it
             // only ever arises at the state PUT door, whose mapper renders
@@ -269,10 +273,12 @@ mod tests {
              Pick or fix a method in Settings → Agents."
         );
         // Shape/IO problems are not refusals.
-        assert!(LaunchRefusal::from_route_auth_error(&RouteAuthError::Materialize {
-            detail: "disk full".into()
-        })
-        .is_none());
+        assert!(
+            LaunchRefusal::from_route_auth_error(&RouteAuthError::Materialize {
+                detail: "disk full".into()
+            })
+            .is_none()
+        );
     }
 
     /// The frozen `NoConfiguredSource` sentence names the product a person

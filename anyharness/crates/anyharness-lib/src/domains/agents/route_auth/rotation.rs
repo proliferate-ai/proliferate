@@ -59,7 +59,7 @@ pub fn seat_pool(sources: &HarnessSources) -> Vec<String> {
     let mut pool: Vec<String> = Vec::new();
     for source in &sources.sources {
         if let ResolvedSource::Seat(seat) = source {
-            if !pool.iter().any(|id| *id == seat.seat_id) {
+            if !pool.contains(&seat.seat_id) {
                 pool.push(seat.seat_id.clone());
             }
         }

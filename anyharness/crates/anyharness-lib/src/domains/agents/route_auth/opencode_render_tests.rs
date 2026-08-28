@@ -147,7 +147,6 @@ fn opencode_gateway_uses_plan_models_not_state() {
     home.write_state_json(&gateway_state("opencode"));
     let resolver = FixedResolver(GatewayModelPlan {
         models: vec!["claude-haiku-4-5-20251001".to_string()],
-        ..Default::default()
     });
     let rendered = resolve_launch_route_auth(home.path(), "opencode", &resolver).expect("render");
     let config_path = rendered

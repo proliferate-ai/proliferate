@@ -150,7 +150,7 @@ Target moves (later sweep wave): `components/settings/panes/agents/**` + `hooks/
 - Auth-flow integration (server side of the same contracts):
   `tests/integration/test_auth_flow*` in the server suite.
 - Manual: settings and billing rows of
-  [manual-release-qa.md](../../engineering/testing/manual-release-qa.md);
+  [manual-release-qa.md](../../../guides/deploying/manual-release-qa.md);
   `STRIPE=1` lanes per
   [stripe-local-testing.md](../../../guides/local/stripe-local-testing.md).
 

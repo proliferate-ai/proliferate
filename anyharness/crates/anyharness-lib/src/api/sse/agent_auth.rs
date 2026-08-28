@@ -74,6 +74,15 @@ fn live_status_stream(
         .filter_map(|result| futures::future::ready(result.ok().and_then(doc_to_event)))
 }
 
+fn doc_to_event(doc: StatusDoc) -> Option<Result<Event, Infallible>> {
+    let doc = status_doc_to_contract(doc);
+    let json = serde_json::to_string(&doc).ok()?;
+    Some(Ok(Event::default()
+        .id(doc.harness_kind)
+        .event("agent_auth_status")
+        .data(json)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,13 +137,4 @@ mod tests {
         let events: Vec<_> = live_status_stream(rx).collect().await;
         assert_eq!(events.len(), 2);
     }
-}
-
-fn doc_to_event(doc: StatusDoc) -> Option<Result<Event, Infallible>> {
-    let doc = status_doc_to_contract(doc);
-    let json = serde_json::to_string(&doc).ok()?;
-    Some(Ok(Event::default()
-        .id(doc.harness_kind)
-        .event("agent_auth_status")
-        .data(json)))
 }

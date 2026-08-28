@@ -150,7 +150,8 @@ def test_a_present_non_transaction_type_drops_the_event(value: Any) -> None:
 
 @pytest.mark.parametrize(
     ("environment", "survives"),
-    [("trusted-beta", True), ("staging", True), ("production", True), ("Production", True),
+    [("trusted-beta", True), ("staging", True), ("production", True), ("local", True),
+     ("dogfood", True), ("Production", False),
      ("STAGING", False), ("Production ", False), ("development", False), ("", False),
      (None, False), (7, False), ("prod\nuction", False), ("Bearer token", False),
      ("/Users/private/x", False)],
@@ -190,7 +191,7 @@ VALID_UUID_HEX = "0f3c2a9d6b8e4f1aa7c25d3e9b64108f"
         ("telemetry_mode", "hosted_product", True), ("telemetry_mode", "self_managed", False),
         ("request_id", VALID_UUID, True), ("request_id", SENTINELS[12], False),
         ("http_method", "POST", True), ("http_method", "post", False),
-        ("http_route", "/orgs/{org_id}", False), ("http_route", "/orgs/" + VALID_UUID, False),
+        ("http_route", "/orgs/{org_id}", True), ("http_route", "/orgs/" + VALID_UUID, False),
         ("user_id", VALID_UUID, True), ("organization_id", VALID_UUID, True),
         ("cloud_workspace_id", VALID_UUID, True), ("cloud_target_id", VALID_UUID, True),
         ("sandbox_profile_id", VALID_UUID, True), ("cloud_sandbox_id", VALID_UUID, True),
@@ -466,7 +467,7 @@ def test_transaction_projection_keeps_only_the_proven_surface() -> None:
          "op": "queue.publish", "status": "ok", "start_timestamp": 1755600000.1,
          "timestamp": 1755600000.9}
     ]
-    assert projected["tags"] == {"http_method": "POST"}
+    assert projected["tags"] == {"http_route": "/orgs/{org_id}", "http_method": "POST"}
     assert projected["request"] == {"method": "POST"}
     assert "fingerprint" not in projected
 

@@ -15,6 +15,7 @@ use super::model::{
     SupportSnapshotPreparationOutput, SupportSnapshotSelectionInput, SupportSnapshotWindowOutput,
     SupportSnapshotWorkspaceInput, DISCLOSURE_VERSION, SESSION_EVIDENCE_BYTES,
 };
+use super::runtime::truncate_to_milliseconds;
 use super::state::{
     ArtifactAuthorization, OpenPreparation, PreparationCleanup, PreparationPhase,
     PreparationTerminal, ReadinessState,
@@ -23,7 +24,6 @@ use super::terminal::{
     finish_error_code, interruption_error_code, note_export_permit_noncanonical_window,
     terminal_for_finish_error, terminal_for_interruption,
 };
-use super::runtime::truncate_to_milliseconds;
 use super::watchdog::spawn_preparation_watchdog;
 use super::SupportSnapshotCoordinator;
 
@@ -584,7 +584,7 @@ fn validate_begin_times(
     let granted = DateTime::parse_from_rfc3339(&input.consent.granted_at)
         .map_err(|_| "support_snapshot_invalid_input".to_string())?
         .with_timezone(&Utc);
-    if report > granted || granted > now.clone() {
+    if report > granted || granted > *now {
         return Err("support_snapshot_invalid_input".to_string());
     }
     Ok(())

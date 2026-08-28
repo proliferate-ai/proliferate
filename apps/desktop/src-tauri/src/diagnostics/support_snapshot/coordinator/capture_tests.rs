@@ -3,18 +3,16 @@ use std::sync::Arc;
 use tokio::sync::Barrier;
 use tokio::time::Duration;
 
-use crate::diagnostics_collector::support_export::{
-    probe, SupportExportIssuanceError as Issuance,
-};
+use crate::diagnostics_collector::support_export::{probe, SupportExportIssuanceError as Issuance};
 
 use super::super::super::artifact_store::SupportArtifactStore;
-use super::{capture_native_support_evidence, CaptureError};
 use super::super::control::{PreparationControl, PreparationInterruption};
 use super::super::fake_runtime::FakeRuntime;
 use super::super::runtime::CoordinatorRuntime;
 use super::super::state::ReadinessState;
 use super::super::tests::test_coordinator;
 use super::join_concurrently;
+use super::{capture_native_support_evidence, CaptureError};
 
 #[tokio::test]
 async fn export_health_child_and_file_futures_reach_one_start_latch() {

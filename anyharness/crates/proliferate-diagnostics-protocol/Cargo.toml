@@ -8,3 +8,6 @@ description = "Provider-neutral v1 diagnostics wire contract for Proliferate"
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+
+[lints]
+workspace = true

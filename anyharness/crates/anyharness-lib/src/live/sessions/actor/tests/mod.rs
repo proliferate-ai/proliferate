@@ -13,9 +13,7 @@ use super::config::handle::{
     initial_control_disposition, intent_without_dropped_controls, InitialControlDisposition,
 };
 use super::config::persist::{emit_live_config_update, load_startup_restore_snapshot};
-use super::config::queue::{
-    pending_model_is_in_latest_live_snapshot, queue_pending_config_change,
-};
+use super::config::queue::{pending_model_is_in_latest_live_snapshot, queue_pending_config_change};
 use super::config::restore::canonical_restore_values;
 use super::config::selection::{
     find_select_option_for_request, is_mode_config_request, is_model_config_request,

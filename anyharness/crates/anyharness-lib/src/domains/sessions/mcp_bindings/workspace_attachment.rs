@@ -143,7 +143,10 @@ mod tests {
     #[test]
     fn phase_tokens_are_stable_snake_case() {
         assert_eq!(WorkspaceMcpAttachmentPhase::Selection.as_str(), "selection");
-        assert_eq!(WorkspaceMcpAttachmentPhase::TokenMint.as_str(), "token_mint");
+        assert_eq!(
+            WorkspaceMcpAttachmentPhase::TokenMint.as_str(),
+            "token_mint"
+        );
         assert_eq!(
             WorkspaceMcpAttachmentPhase::SummaryAssembly.as_str(),
             "summary_assembly"

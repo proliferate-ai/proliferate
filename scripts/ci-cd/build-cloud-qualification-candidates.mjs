@@ -11,10 +11,11 @@
 //      candidate-API origin
 //   -> assemble the six-artifact candidate map + a subdomain sidecar
 //
-// `make qualification-managed-cloud` and the release-e2e.yml manual job both
-// call this same script — there is no second implementation of these build
-// steps. The local-world builder (build-local-qualification-candidates.mjs)
-// is untouched (extension contract: new worlds get new builder files).
+// Its two invokers (the managed-cloud Make target and the release-e2e.yml
+// manual job) were deleted in the 2026-08 CI cull; the builder and its unit
+// test are kept for the managed-cloud world's eventual re-homing. The
+// local-world builder (build-local-qualification-candidates.mjs) is untouched
+// (extension contract: new worlds get new builder files).
 //
 // Deviation from a literal reading of the BRIEF (disclosed): this script does
 // NOT build or publish the immutable E2B template. The contracts-stage

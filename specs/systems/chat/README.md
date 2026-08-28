@@ -205,7 +205,7 @@ that chat and the workspace surface both consume; `components/workspace/chat` â†
   [check_frontend_fences.py](../../../scripts/check_frontend_fences.py)
   (warn mode), [report_frontend_structure.py](../../../scripts/report_frontend_structure.py).
 - Manual: the chat rows of
-  [manual-release-qa.md](../../engineering/testing/manual-release-qa.md).
+  [manual-release-qa.md](../../../guides/deploying/manual-release-qa.md).
 
 ## Known gaps / follow-ups
 

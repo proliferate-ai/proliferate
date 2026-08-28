@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::sync::Mutex;
 
 use tokio::time::{sleep, Duration};
 
@@ -46,10 +45,7 @@ impl Drop for AgentProgramGuard {
 
 #[tokio::test(flavor = "current_thread")]
 async fn create_replay_joins_pending_startup_and_persists_readiness() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("env mutex");
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let state = test_state("pending");
@@ -113,10 +109,7 @@ async fn create_replay_joins_pending_startup_and_persists_readiness() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn create_replay_persists_ready_handle_when_the_first_request_was_cancelled() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("env mutex");
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let state = test_state("ready");

@@ -255,9 +255,8 @@ impl TreeTracker {
     pub(super) fn depth_of(&self, pid: u32, parents: &HashMap<u32, u32>) -> Option<u32> {
         let mut seen = HashSet::new();
         seen.insert(pid);
-        let mut depth = 0;
         let mut cursor = pid;
-        for _ in 0..DEPTH_LIMIT {
+        for depth in 0..DEPTH_LIMIT {
             let Some(&parent) = parents.get(&cursor) else {
                 return Some(depth);
             };
@@ -267,7 +266,6 @@ impl TreeTracker {
             if !seen.insert(parent) {
                 return None;
             }
-            depth += 1;
             cursor = parent;
         }
         Some(DEPTH_LIMIT)

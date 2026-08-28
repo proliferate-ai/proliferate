@@ -259,7 +259,7 @@ fn initialize_failure(
 
 pub(in crate::live::sessions) async fn start_new_session(
     conn: &acp::ConnectionTo<acp::Agent>,
-    workspace_path: &std::path::PathBuf,
+    workspace_path: &std::path::Path,
     mcp_servers: &[SessionMcpServer],
     system_prompt_append: Option<&str>,
     session_id: &str,
@@ -268,7 +268,7 @@ pub(in crate::live::sessions) async fn start_new_session(
     completed_event: &str,
     failed_event: &str,
 ) -> anyhow::Result<acp::schema::NewSessionResponse> {
-    let mut request = acp::schema::NewSessionRequest::new(workspace_path.clone());
+    let mut request = acp::schema::NewSessionRequest::new(workspace_path.to_path_buf());
     if !mcp_servers.is_empty() {
         request = request.mcp_servers(to_acp_servers(mcp_servers));
     }

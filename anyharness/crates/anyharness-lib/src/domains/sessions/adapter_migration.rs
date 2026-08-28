@@ -95,10 +95,16 @@ pub enum IncompatibilityReason {
     },
     /// The marker records an adapter version this build does not recognize for
     /// a migrating harness; its dialect cannot be proven, so it is not loaded.
-    UnrecognizedRecordedAdapter { agent_kind: String, adapter_version: String },
+    UnrecognizedRecordedAdapter {
+        agent_kind: String,
+        adapter_version: String,
+    },
     /// The currently initialized adapter version is unknown or unrecognized for
     /// a migrating harness; compatibility cannot be proven, so fail closed.
-    UnknownCurrentAdapter { agent_kind: String, adapter_version: Option<String> },
+    UnknownCurrentAdapter {
+        agent_kind: String,
+        adapter_version: Option<String>,
+    },
 }
 
 /// Typed, actionable adapter-migration incompatibility. Carries a stable code
@@ -306,8 +312,9 @@ mod tests {
 
     #[test]
     fn same_dialect_loads_directly() {
-        let out = resolve_reattach_compatibility("claude", &marker(CLAUDE_LEGACY), Some(CLAUDE_LEGACY))
-            .expect("legacy under legacy loads");
+        let out =
+            resolve_reattach_compatibility("claude", &marker(CLAUDE_LEGACY), Some(CLAUDE_LEGACY))
+                .expect("legacy under legacy loads");
         assert_eq!(
             out,
             CompatibleLoad::SameDialect {
@@ -372,9 +379,12 @@ mod tests {
         // ADR rung-1 revert path). The old adapter cannot read the canonical
         // dialect and would silently reinterpret it. The marker/dialect guard
         // must fail closed with a typed downgrade error.
-        let err =
-            resolve_reattach_compatibility("claude", &marker(CLAUDE_CANONICAL), Some(CLAUDE_LEGACY))
-                .expect_err("downgrade must be rejected");
+        let err = resolve_reattach_compatibility(
+            "claude",
+            &marker(CLAUDE_CANONICAL),
+            Some(CLAUDE_LEGACY),
+        )
+        .expect_err("downgrade must be rejected");
         assert_eq!(err.code(), AdapterMigrationIncompatibility::CODE);
         assert_eq!(
             err.reason,
@@ -391,7 +401,10 @@ mod tests {
         // control the ADR §5 test row requires.
         let naive_would_accept = |_created: MetadataDialect, _current: MetadataDialect| true;
         assert!(
-            naive_would_accept(MetadataDialect::CanonicalMigrated, MetadataDialect::PinnedLegacy),
+            naive_would_accept(
+                MetadataDialect::CanonicalMigrated,
+                MetadataDialect::PinnedLegacy
+            ),
             "the dangerous scenario is genuinely accepted without the guard"
         );
     }

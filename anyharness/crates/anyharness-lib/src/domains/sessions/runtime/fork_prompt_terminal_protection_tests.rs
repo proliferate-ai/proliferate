@@ -53,7 +53,7 @@ const FIXED_PROTECTED_ERROR_MESSAGE: &str = "protected ACP request failed";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn explicit_child_prompt_provider_error_persists_a_fixed_terminal_without_sentinels() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("fork-child-prompt-explicit-error");
@@ -116,7 +116,7 @@ async fn explicit_child_prompt_provider_error_persists_a_fixed_terminal_without_
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn malformed_child_prompt_envelope_fails_closed_without_sentinels_or_provider_projection() {
-    let _env_lock = test_support::lock_env();
+    let _env_lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("fork-child-prompt-malformed");

@@ -5,7 +5,7 @@
 //! turn reports arriving through the real session extension when the scripted
 //! agent ends its turns.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::app::{test_support, AppState};
@@ -13,6 +13,7 @@ use crate::domains::sessions::runtime::prompt_message_actor_tests::{
     build_state, install_scripted_agent_env, prompt_texts, read_requests, temp_runtime_home,
     write_scripted_agent, EnvVarGuard, ScriptedAgent,
 };
+use crate::domains::sessions::runtime::SendPromptOutcome;
 use crate::domains::workflows::definition::{
     DefinitionEdge, DefinitionInput, DefinitionNode, DocTemplate, InvocationPlacement,
     InvocationSnapshot, PlacementMode, WorkflowDefinition, DEFINITION_SCHEMA_VERSION,
@@ -23,7 +24,6 @@ use crate::domains::workflows::model::{
     WorkflowInterruptionCode, WorkflowNodeFailureCode, WorkflowNodeKind, WorkflowNodeStatus,
     WorkflowNodeType, WorkflowRunStatus,
 };
-use crate::domains::sessions::runtime::SendPromptOutcome;
 use crate::domains::workflows::store::{CreatedRun, NewRunParams, WorkflowStore};
 use crate::domains::workflows::transition::{
     RunState, TurnFinished, TurnStopReason, WorkflowCommand,
@@ -76,7 +76,7 @@ pub(super) struct WorkflowFixture {
     _agent_env: (EnvVarGuard, EnvVarGuard),
     _data_key: test_support::DataKeyEnvGuard,
     _bearer: test_support::BearerTokenEnvGuard,
-    _env_lock: std::sync::MutexGuard<'static, ()>,
+    _env_lock: tokio::sync::MutexGuard<'static, ()>,
 }
 
 impl Drop for WorkflowFixture {
@@ -85,10 +85,9 @@ impl Drop for WorkflowFixture {
     }
 }
 
-/// Boot the app over a db that may already hold workflow rows (the boot-fence
-/// scenario creates its run BEFORE the app exists — the crash-window shape).
-fn boot_fixture(label: &str, prepare: impl FnOnce(&Db, &PathBuf)) -> WorkflowFixture {
-    let env_lock = test_support::lock_env();
+/// Boot over a db that may already hold workflow rows (the boot-fence shape).
+async fn boot_fixture(label: &str, prepare: impl FnOnce(&Db, &PathBuf)) -> WorkflowFixture {
+    let env_lock = test_support::lock_env().await;
     let bearer = test_support::set_bearer_token_env(None);
     let data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home(label);
@@ -117,8 +116,8 @@ fn boot_fixture(label: &str, prepare: impl FnOnce(&Db, &PathBuf)) -> WorkflowFix
     }
 }
 
-pub(super) fn fixture(label: &str) -> WorkflowFixture {
-    boot_fixture(label, |_, _| {})
+pub(super) async fn fixture(label: &str) -> WorkflowFixture {
+    boot_fixture(label, |_, _| {}).await
 }
 
 fn snapshot_for(
@@ -139,14 +138,13 @@ fn snapshot_for(
 
 fn create_run_rows(
     store: &WorkflowStore,
-    workspace_root: &PathBuf,
+    workspace_root: &Path,
     run_id: &str,
     snapshot: InvocationSnapshot,
 ) -> CreatedRun {
     // Production stores the courier's delivered JSON byte-verbatim; the tests
     // build the definition in code, so its serialization stands in for it.
-    let definition_json =
-        serde_json::to_string(&snapshot.definition).expect("definition json");
+    let definition_json = serde_json::to_string(&snapshot.definition).expect("definition json");
     let created = store
         .create_run_with_first_node(NewRunParams {
             run_id: run_id.into(),
@@ -156,8 +154,13 @@ fn create_run_rows(
             definition_json,
         })
         .expect("create run rows");
-    materialize_context(workspace_root, run_id, &created.docs, &snapshot.definition.doc_templates)
-        .expect("materialize context");
+    materialize_context(
+        workspace_root,
+        run_id,
+        &created.docs,
+        &snapshot.definition.doc_templates,
+    )
+    .expect("materialize context");
     created
 }
 
@@ -246,7 +249,10 @@ impl WorkflowFixture {
     }
 }
 
-pub(super) fn node_by_def<'a>(state: &'a RunState, definition_node_id: &str) -> &'a crate::domains::workflows::model::WorkflowRunNodeRecord {
+pub(super) fn node_by_def<'a>(
+    state: &'a RunState,
+    definition_node_id: &str,
+) -> &'a crate::domains::workflows::model::WorkflowRunNodeRecord {
     state
         .nodes
         .iter()
@@ -274,12 +280,15 @@ fn prompt_block_texts(path: &std::path::Path) -> Vec<Vec<String>> {
 
 fn assert_quiesced(state: &RunState) {
     let violations = invariants::sweep(state);
-    assert!(violations.is_empty(), "invariant violations: {violations:?}");
+    assert!(
+        violations.is_empty(),
+        "invariant violations: {violations:?}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn happy_path_resolves_references_teaches_the_preamble_and_completes() {
-    let fixture = fixture("wf-happy");
+    let fixture = fixture("wf-happy").await;
     let definition = WorkflowDefinition {
         schema_version: DEFINITION_SCHEMA_VERSION,
         nodes: vec![
@@ -389,7 +398,7 @@ async fn happy_path_resolves_references_teaches_the_preamble_and_completes() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_gate_parks_the_run_and_approve_advances_it() {
-    let fixture = fixture("wf-gate");
+    let fixture = fixture("wf-gate").await;
     let definition = chain(vec![
         hitl_node("review", "Summarize for review"),
         agent_node("ship", "Ship it"),
@@ -426,7 +435,7 @@ async fn a_gate_parks_the_run_and_approve_advances_it() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn flip_type_advances_a_waiting_gate_and_parks_a_running_agent_node() {
-    let fixture = fixture("wf-flip");
+    let fixture = fixture("wf-flip").await;
     let definition = chain(vec![
         hitl_node("gate", "Check the plan"),
         agent_node("work", "blocking turn"),
@@ -495,7 +504,7 @@ async fn flip_type_advances_a_waiting_gate_and_parks_a_running_agent_node() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_refusal_fails_the_run_and_fail_and_redo_replaces_the_node() {
-    let fixture = fixture("wf-redo");
+    let fixture = fixture("wf-redo").await;
     let definition = chain(vec![agent_node("solo", "PLEASE-REFUSE to do this")]);
     fixture.start("run-redo", definition);
 
@@ -535,14 +544,13 @@ async fn a_refusal_fails_the_run_and_fail_and_redo_replaces_the_node() {
         node_by_def(&state, "solo").status,
         WorkflowNodeStatus::Failed
     );
-    assert!(prompt_texts(&fixture.script.request_log)
-        .contains(&"Redo this cleanly".to_string()));
+    assert!(prompt_texts(&fixture.script.request_log).contains(&"Redo this cleanly".to_string()));
     assert_quiesced(&state);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn undo_advance_disposes_the_young_session_and_reapproving_relaunches() {
-    let fixture = fixture("wf-undo");
+    let fixture = fixture("wf-undo").await;
     let definition = chain(vec![
         agent_node("first", "do the first step"),
         agent_node("second", "blocking turn"),
@@ -613,7 +621,7 @@ async fn undo_advance_disposes_the_young_session_and_reapproving_relaunches() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_adhoc_node_runs_beside_the_chain_and_never_moves_it() {
-    let fixture = fixture("wf-adhoc");
+    let fixture = fixture("wf-adhoc").await;
     let definition = chain(vec![agent_node("solo", "blocking turn")]);
     let created = fixture.start("run-adhoc", definition);
 
@@ -638,13 +646,9 @@ async fn an_adhoc_node_runs_beside_the_chain_and_never_moves_it() {
     // The adhoc node completes its own row while the chain node still runs.
     let state = fixture
         .wait_for("run-adhoc", "adhoc row completed", |state| {
-            state
-                .nodes
-                .iter()
-                .any(|node| {
-                    node.kind == WorkflowNodeKind::Adhoc
-                        && node.status == WorkflowNodeStatus::Completed
-                })
+            state.nodes.iter().any(|node| {
+                node.kind == WorkflowNodeKind::Adhoc && node.status == WorkflowNodeStatus::Completed
+            })
         })
         .await;
     assert_eq!(state.run.status, WorkflowRunStatus::Running);
@@ -661,12 +665,14 @@ async fn an_adhoc_node_runs_beside_the_chain_and_never_moves_it() {
         adhoc.anchor_node_row_id.as_deref(),
         Some(created.first_node_row_id.as_str())
     );
-    assert!(prompt_texts(&fixture.script.request_log)
-        .contains(&"adhoc side question".to_string()));
+    assert!(prompt_texts(&fixture.script.request_log).contains(&"adhoc side question".to_string()));
     // The pick persisted on the row and reached the minted session (F3): a
     // model choice the API accepted must never silently launch the default.
     assert_eq!(
-        adhoc.model.as_ref().and_then(|model| model.model_id.as_deref()),
+        adhoc
+            .model
+            .as_ref()
+            .and_then(|model| model.model_id.as_deref()),
         Some("haiku")
     );
     // Creation records the validated pick on the immutable launch intent.
@@ -695,9 +701,13 @@ async fn the_boot_fence_heals_the_crash_window_and_resume_completes_the_run() {
             &WorkflowStore::new(db.clone()),
             workspace_root,
             "run-fence",
-            snapshot_for(chain(vec![agent_node("solo", "heal me")]), serde_json::Map::new()),
+            snapshot_for(
+                chain(vec![agent_node("solo", "heal me")]),
+                serde_json::Map::new(),
+            ),
         );
-    });
+    })
+    .await;
 
     // AppState::new ran the fence before the manager accepted anything.
     let state = fixture
@@ -718,9 +728,7 @@ async fn the_boot_fence_heals_the_crash_window_and_resume_completes_the_run() {
 
     // Resume is always a human choice; it mints the session that never got
     // born, in the same workspace.
-    fixture
-        .command("run-fence", WorkflowCommand::Resume)
-        .await;
+    fixture.command("run-fence", WorkflowCommand::Resume).await;
     let state = fixture
         .wait_for("run-fence", "resumed run completes", |state| {
             state.run.status == WorkflowRunStatus::Completed
@@ -733,7 +741,7 @@ async fn the_boot_fence_heals_the_crash_window_and_resume_completes_the_run() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_queued_interjection_holds_the_advance_until_the_queue_drains() {
-    let fixture = fixture("wf-interject");
+    let fixture = fixture("wf-interject").await;
     let definition = chain(vec![
         agent_node("hold", "blocking turn"),
         agent_node("ship", "then ship"),
@@ -788,7 +796,7 @@ async fn a_queued_interjection_holds_the_advance_until_the_queue_drains() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_stale_turn_report_after_undo_neither_moves_rows_nor_closes_the_window() {
-    let fixture = fixture("wf-stale");
+    let fixture = fixture("wf-stale").await;
     let definition = chain(vec![
         agent_node("first", "do the first step"),
         agent_node("second", "blocking turn"),
@@ -864,7 +872,7 @@ async fn a_stale_turn_report_after_undo_neither_moves_rows_nor_closes_the_window
 async fn a_failed_launch_fails_the_run_and_compensates_the_half_born_session() {
     use crate::integrations::agent_cli::executable::make_executable;
 
-    let fixture = fixture("wf-launchfail");
+    let fixture = fixture("wf-launchfail").await;
     // Swap the agent for a dud AFTER the fixture installed the real one: a
     // valid executable (so readiness passes and the durable session row gets
     // created) that exits without ever speaking ACP (so the start fails —
@@ -917,7 +925,7 @@ async fn a_failed_launch_fails_the_run_and_compensates_the_half_born_session() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn turn_reports_never_block_even_while_the_actor_is_busy() {
-    let fixture = fixture("wf-wedge");
+    let fixture = fixture("wf-wedge").await;
     let definition = chain(vec![agent_node("solo", "blocking turn")]);
     let created = fixture.start("run-wedge", definition);
 
@@ -966,8 +974,7 @@ async fn turn_reports_never_block_even_while_the_actor_is_busy() {
     fixture
         .wait_for("run-wedge", "adhoc probe completed", |state| {
             state.nodes.iter().any(|node| {
-                node.kind == WorkflowNodeKind::Adhoc
-                    && node.status == WorkflowNodeStatus::Completed
+                node.kind == WorkflowNodeKind::Adhoc && node.status == WorkflowNodeStatus::Completed
             })
         })
         .await;
@@ -990,7 +997,7 @@ async fn turn_reports_never_block_even_while_the_actor_is_busy() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn fail_and_redo_from_running_disposes_the_wedged_session_and_relaunches() {
-    let fixture = fixture("wf-redorun");
+    let fixture = fixture("wf-redorun").await;
     let definition = chain(vec![agent_node("solo", "blocking turn")]);
     fixture.start("run-redorun", definition);
 
@@ -1029,10 +1036,7 @@ async fn fail_and_redo_from_running_disposes_the_wedged_session_and_relaunches()
     assert_eq!(old.status, WorkflowNodeStatus::Failed);
     // Taken over from a running (non-failed) state: superseded, not a
     // turn-sourced failure code.
-    assert_eq!(
-        old.failure_code,
-        Some(WorkflowNodeFailureCode::Superseded)
-    );
+    assert_eq!(old.failure_code, Some(WorkflowNodeFailureCode::Superseded));
     // Disposed, not destroyed: the session row survives, but it no longer
     // reports into any workflow.
     assert!(
@@ -1060,7 +1064,6 @@ async fn fail_and_redo_from_running_disposes_the_wedged_session_and_relaunches()
         .expect("replacement row");
     assert_eq!(replacement.kind, WorkflowNodeKind::Replacement);
     assert_eq!(replacement.status, WorkflowNodeStatus::Completed);
-    assert!(prompt_texts(&fixture.script.request_log)
-        .contains(&"redo from running".to_string()));
+    assert!(prompt_texts(&fixture.script.request_log).contains(&"redo from running".to_string()));
     assert_quiesced(&state);
 }

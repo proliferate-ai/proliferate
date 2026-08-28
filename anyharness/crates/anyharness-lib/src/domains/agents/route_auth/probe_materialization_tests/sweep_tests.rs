@@ -29,14 +29,16 @@ fn the_sweep_removes_only_abandoned_and_old_scratch_roots() {
     let max_age = std::time::Duration::from_secs(720);
     let old_nanos = now_nanos - (max_age.as_nanos() * 2);
 
-    // A real live foreign process, so (b) is not a fiction.
-    let mut live_child = std::process::Command::new("sleep")
+    // A real live foreign process, so (b) is not a fiction. Absolute paths:
+    // sibling test modules mutate the process-wide PATH under their env
+    // guards, and a PATH lookup here would race them.
+    let mut live_child = std::process::Command::new("/bin/sleep")
         .arg("30")
         .spawn()
         .expect("spawn a live foreign process");
     let live_pid = live_child.id();
     // A pid that is definitely dead: spawn and reap.
-    let mut dead_child = std::process::Command::new("true")
+    let mut dead_child = std::process::Command::new("/usr/bin/true")
         .spawn()
         .expect("spawn a short-lived process");
     let dead_pid = dead_child.id();

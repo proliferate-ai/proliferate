@@ -209,6 +209,8 @@ export const HARNESS_PANE_COPY = {
   seatMintFailed:
     "The sign-in did not produce a seat. Close the terminal and try again.",
   seatUploadFailed: "Could not save the seat — re-run the sign-in.",
+  seatUploadGithubLinkRequired:
+    "Your Proliferate account isn't linked to GitHub yet. Connect GitHub in Settings → Account, then add the login again.",
   seatEmptyList: "No Claude.ai logins yet.",
   seatRemove: "Remove",
   seatRemoveError: "Could not remove the seat.",
@@ -245,6 +247,11 @@ export const HARNESS_PANE_COPY = {
   // never "Not configured", never a warning, never a nag toward a managed
   // method (the mint offer stays an optional upgrade).
   authBadgeUsingOwnLogin: "Using your own login",
+  // `authBadgeUnverified` / `authBadgeExpired` were the seat badge's own words
+  // in `HarnessAuthStatusBadge.tsx`. That derivation is deleted and fenced
+  // (FE-PATHS-1); the same two states are now the status document's, worded by
+  // `agent-auth-status-presentation.ts` as `authBadgeNotVerified` and
+  // `authBadgeNotAuthenticated`. One vocabulary, not two.
   authBadgeNotConfigured: "Not configured",
   authBadgeNotAuthenticated: "Not authenticated",
   // The status document's remaining badge words (agent_auth §2). No document at

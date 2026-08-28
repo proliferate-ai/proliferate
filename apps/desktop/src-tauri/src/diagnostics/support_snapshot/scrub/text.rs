@@ -241,7 +241,7 @@ impl SupportExportScrubber {
             let exact_prefix = value[end..]
                 .chars()
                 .next()
-                .map_or(true, |next| matches!(next, '/' | '\\'));
+                .is_none_or(|next| matches!(next, '/' | '\\'));
             if !exact_prefix {
                 continue;
             }

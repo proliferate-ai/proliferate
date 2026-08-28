@@ -2,7 +2,7 @@
 //! process-local. This module owns the wire-ordering and durable dispatch
 //! boundary; ordinary load/new startup remains in `native_session.rs`.
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 
 use anyharness_contract::v1::SessionActionCapabilities;
@@ -36,7 +36,7 @@ pub(in crate::live::sessions) async fn hydrate_parent_and_fork(
     conn: &acp::ConnectionTo<acp::Agent>,
     inbound: Arc<InboundDoor>,
     durable: Arc<dyn ForkDispatchDurable>,
-    workspace_path: &PathBuf,
+    workspace_path: &Path,
     mcp_servers: &[SessionMcpServer],
     system_prompt_append: Option<&str>,
     action_capabilities: SessionActionCapabilities,
@@ -78,7 +78,7 @@ pub(in crate::live::sessions) async fn hydrate_parent_and_fork(
     let system_prompt_meta = build_system_prompt_meta(system_prompt_append);
     let mut load_request = acp::schema::LoadSessionRequest::new(
         parent_native_session_id.to_string(),
-        workspace_path.clone(),
+        workspace_path.to_path_buf(),
     )
     .mcp_servers(to_acp_servers(mcp_servers))
     .meta(system_prompt_meta.clone());
@@ -148,7 +148,7 @@ pub(in crate::live::sessions) async fn hydrate_parent_and_fork(
 
     let mut fork_request = acp::schema::ForkSessionRequest::new(
         parent_native_session_id.to_string(),
-        workspace_path.clone(),
+        workspace_path.to_path_buf(),
     )
     .mcp_servers(to_acp_servers(mcp_servers))
     .meta(merge_targeted_fork_anchor_meta(

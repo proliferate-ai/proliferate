@@ -93,7 +93,7 @@ pub(super) struct ComposedBody {
 }
 
 impl ComposedBody {
-    pub(super) fn into_doc(&self, harness_kind: &str, probe: ProbeStatus) -> StatusDoc {
+    pub(super) fn to_doc(&self, harness_kind: &str, probe: ProbeStatus) -> StatusDoc {
         StatusDoc {
             harness_kind: harness_kind.to_string(),
             methods: self.methods.clone(),

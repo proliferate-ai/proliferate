@@ -89,6 +89,9 @@ async fn spawn_locking_child(path: &Path) -> Child {
         loop {
             let file = OpenOptions::new()
                 .create(true)
+                // Lock fixture: content unused, and the child holds it open —
+                // truncation would be wrong on contention.
+                .truncate(false)
                 .read(true)
                 .write(true)
                 .open(path)
@@ -124,6 +127,8 @@ fn shutdown_live_child_fixture() {
     let path = std::env::var_os(CHILD_LOCK_ENV).expect("child lock path");
     let file = OpenOptions::new()
         .create(true)
+        // Lock fixture: content unused; see the guarded loop above.
+        .truncate(false)
         .read(true)
         .write(true)
         .open(path)

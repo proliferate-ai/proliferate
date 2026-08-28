@@ -13,7 +13,7 @@ Engineering Analytics owns product and adoption measurement. It owns the first-p
   read-only BI client may query.
 - [Observability](../observability/README.md) owns logs, exceptions, Sentry,
   and production correlation.
-- [Delivery](../shipping/release-delivery.md) owns release and artifact identity.
+- [Delivery](../ci-cd/release-delivery.md) owns release and artifact identity.
 
 ## First-Party Daily Activity
 

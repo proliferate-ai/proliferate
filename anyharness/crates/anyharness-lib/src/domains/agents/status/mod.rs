@@ -140,6 +140,11 @@ impl AgentStatusService {
         Self::with_detection_home(db, runtime_home, targets, universe, dirs::home_dir())
     }
 
+    /// Test seam: a service whose harness universe and detection home are the
+    /// test's, not the machine's. `cfg(test)` because the clippy constitution
+    /// main brought in runs `-D warnings` over the non-test build too, and a
+    /// `pub(crate)` item only tests reach is dead code there.
+    #[cfg(test)]
     pub(crate) fn with_parts(
         db: Db,
         runtime_home: PathBuf,
@@ -443,7 +448,7 @@ impl AgentStatusService {
             .write_document(harness_kind, Utc::now().timestamp(), |row| {
                 let (probe, observation) = probe_block(intent, harness_kind, row);
                 let doc = match body.as_ref() {
-                    Some(body) => body.into_doc(harness_kind, probe),
+                    Some(body) => body.to_doc(harness_kind, probe),
                     // A probe write patches the persisted document's own body.
                     // No row means nothing to patch and nothing to say. (A
                     // malformed row never reaches this `?`: `probe_write`

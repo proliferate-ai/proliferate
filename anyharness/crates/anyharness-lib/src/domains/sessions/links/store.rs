@@ -1,8 +1,8 @@
 use rusqlite::{params, OptionalExtension};
 
 use super::model::{
-    SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation, SubagentLinkCloseOutcome,
-    SubagentLinkCloseResult, SubagentLinkOpenOutcome, SubagentLinkOpenResult,
+    SessionLinkRecord, SessionLinkRelation, SubagentLinkCloseOutcome, SubagentLinkCloseResult,
+    SubagentLinkOpenOutcome, SubagentLinkOpenResult,
 };
 use super::row::map_session_link;
 use crate::domains::agents::launch_options::{

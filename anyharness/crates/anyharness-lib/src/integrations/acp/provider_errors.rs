@@ -363,8 +363,9 @@ mod tests {
 
     #[test]
     fn seat_limit_classifier_extracts_the_piped_epoch() {
-        let observation = classify_seat_usage_limit_error("Claude AI usage limit reached|1756220400")
-            .expect("classic pipe shape");
+        let observation =
+            classify_seat_usage_limit_error("Claude AI usage limit reached|1756220400")
+                .expect("classic pipe shape");
         assert_eq!(observation.reset_at_epoch_s, Some(1_756_220_400));
         assert_eq!(observation.window, "five_hour");
     }
@@ -407,8 +408,8 @@ mod tests {
         .is_none());
         // A pipe with a non-10-digit tail still matches as a limit, but with
         // no parseable reset.
-        let observation = classify_seat_usage_limit_error("usage limit reached|123")
-            .expect("still a limit hit");
+        let observation =
+            classify_seat_usage_limit_error("usage limit reached|123").expect("still a limit hit");
         assert_eq!(observation.reset_at_epoch_s, None);
     }
 }

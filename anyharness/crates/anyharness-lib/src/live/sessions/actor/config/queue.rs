@@ -124,17 +124,11 @@ pub(in crate::live::sessions::actor) async fn apply_pending_config_changes_if_id
     pending.sort_by_key(|change| pending_config_rank(startup_state, &change.config_id));
 
     for change in pending {
-        let option = find_select_option_for_request(
-            &startup_state.config_options,
-            &change.config_id,
-        );
+        let option =
+            find_select_option_for_request(&startup_state.config_options, &change.config_id);
         let is_model_request = is_model_config_request(&change.config_id, option);
         let live_snapshot_authorized_model = if is_model_request {
-            pending_model_is_in_latest_live_snapshot(
-                store,
-                session_id,
-                &change.value,
-            )?
+            pending_model_is_in_latest_live_snapshot(store, session_id, &change.value)?
         } else {
             false
         };

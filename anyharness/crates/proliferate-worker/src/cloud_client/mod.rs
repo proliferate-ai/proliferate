@@ -121,7 +121,6 @@ pub struct IngestHarnessLaunchOptionsRequest {
     pub payload_json: String,
 }
 
-
 impl CloudClient {
     pub fn new(config: &WorkerConfig) -> Result<Self, WorkerError> {
         // Authenticated client: never follows redirects to prevent leaking the
@@ -341,7 +340,6 @@ async fn parse_json_response<T: DeserializeOwned>(
     }
     Ok(response.json().await?)
 }
-
 
 #[cfg(test)]
 mod tests;

@@ -14,9 +14,7 @@ use crate::domains::sessions::mcp_bindings::model::{
     SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
 };
 use crate::domains::sessions::model::SessionMcpBindingPolicy;
-use crate::integrations::integration_gateway::{
-    IntegrationGatewayConfig, INTEGRATION_GATEWAY_DOTFILE, INTEGRATION_GATEWAY_ID,
-};
+use crate::integrations::integration_gateway::{IntegrationGatewayConfig, INTEGRATION_GATEWAY_ID};
 
 /// Session extension that injects the integration-gateway MCP server when the
 /// dotfile is present and the session accepts external MCP servers.
@@ -90,11 +88,11 @@ impl SessionExtension for IntegrationGatewaySessionLaunchExtension {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::integrations::integration_gateway::INTEGRATION_GATEWAY_DOTFILE;
 
     use crate::domains::sessions::model::SessionRecord;
     use crate::domains::workspaces::model::{
-        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
-        WorkspaceSurface,
+        WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord, WorkspaceSurface,
     };
     use std::path::{Path, PathBuf};
 

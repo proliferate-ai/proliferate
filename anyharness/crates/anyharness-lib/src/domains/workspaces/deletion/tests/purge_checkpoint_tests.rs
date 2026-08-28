@@ -12,7 +12,7 @@ use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn managed_worktree_purge_releases_checkpoint_objects_for_follow_up_gc() {
-    let _env = test_support::lock_env();
+    let _env = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let harness = Harness::new("managed-checkpoint-gc");
@@ -142,7 +142,7 @@ async fn managed_worktree_purge_releases_checkpoint_objects_for_follow_up_gc() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn local_purge_converges_after_the_repository_directory_is_already_gone() {
-    let _env = test_support::lock_env();
+    let _env = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let harness = Harness::new("local-repo-already-gone");
@@ -209,7 +209,7 @@ async fn local_purge_converges_after_the_repository_directory_is_already_gone() 
 
 #[tokio::test(flavor = "multi_thread")]
 async fn local_purge_inoperable_repo_keeps_expired_checkpoint_discoverable_for_retry() {
-    let _env = test_support::lock_env();
+    let _env = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let harness = Harness::new("local-inoperable-checkpoint-retry");

@@ -783,10 +783,7 @@ fn cancel_from_running_disposes_the_session_and_persists_in_one_commit() {
 
     // A cancelled run is terminal: cancel again is illegal, same as any other
     // command save fail-and-redo.
-    assert!(matches!(
-        next(&reloaded, &cancel),
-        Decision::Illegal(_)
-    ));
+    assert!(matches!(next(&reloaded, &cancel), Decision::Illegal(_)));
 }
 
 /// HIGH finding: a running adhoc row is never `state.current_node()` (by
@@ -813,9 +810,17 @@ fn cancel_with_a_running_adhoc_row_disposes_both_sessions() {
         model: None,
     });
     let applied = decide_and_apply(&store, "run-1", &state, &add_adhoc);
-    let adhoc_id = applied.created_node_row_id.clone().expect("adhoc row minted");
+    let adhoc_id = applied
+        .created_node_row_id
+        .clone()
+        .expect("adhoc row minted");
     store
-        .stamp_session(&adhoc_id, "sess-adhoc", Some("prompt-adhoc"), Some("claude"))
+        .stamp_session(
+            &adhoc_id,
+            "sess-adhoc",
+            Some("prompt-adhoc"),
+            Some("claude"),
+        )
         .expect("stamp adhoc session");
 
     let state = store.load_run_state("run-1").expect("load").expect("run");
@@ -1473,8 +1478,7 @@ fn projection_serializes_camel_case_from_rows() {
     assert_eq!(json["run"]["status"], "running");
     // The definition rides the wire as the verbatim frozen string.
     let definition_json = json["run"]["definitionJson"].as_str().expect("raw string");
-    let definition: serde_json::Value =
-        serde_json::from_str(definition_json).expect("parseable");
+    let definition: serde_json::Value = serde_json::from_str(definition_json).expect("parseable");
     assert_eq!(definition["schemaVersion"], 2);
     let arguments: serde_json::Value =
         serde_json::from_str(json["run"]["argumentsJson"].as_str().expect("raw string"))
@@ -1571,9 +1575,8 @@ fn fail_node_transition_event_carries_named_target_and_failure_code() {
         queue_empty: true,
     });
 
-    let (applied, logged) = capture_tracing_output(|| {
-        decide_and_apply(&store, "run-obs", &created.state, &errored)
-    });
+    let (applied, logged) =
+        capture_tracing_output(|| decide_and_apply(&store, "run-obs", &created.state, &errored));
     assert_eq!(applied.state.run.status, WorkflowRunStatus::Failed);
 
     let transition_line = logged
@@ -1673,5 +1676,8 @@ fn node_launched_carries_session_id_for_the_session_plane_join() {
         .lines()
         .find(|line| line.contains("anyharness.workflow_node_launched"))
         .expect("named node_launched event captured");
-    assert!(launched_line.contains("session_id=sess-x"), "{launched_line}");
+    assert!(
+        launched_line.contains("session_id=sess-x"),
+        "{launched_line}"
+    );
 }

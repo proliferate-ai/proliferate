@@ -30,6 +30,40 @@ fn api_key_source(env_var_name: &str, value: &str) -> AuthSource {
     }
 }
 
+/// `AuthSource`'s `Debug` is hand-written to redact by construction (repo
+/// law: never print a secret; length-only telemetry): the credential
+/// fields render as length-only markers while kinds, names, ids, and the
+/// base URL stay readable — a whole-document `{:?}` (e.g. an `assert_eq!`
+/// panic) must not be able to reproduce a key.
+#[test]
+fn auth_source_debug_redacts_key_value_and_env_values() {
+    let canary = "sk-canary-fixture"; // 17 bytes: pins the marker exactly.
+    let mut source = gateway_source("https://gw.example", canary);
+    source.value = Some(canary.into());
+    source.env_var_name = Some("ANTHROPIC_API_KEY".into());
+    source.env = Some(
+        [("CLAUDE_CODE_OAUTH_TOKEN".to_string(), canary.to_string())]
+            .into_iter()
+            .collect(),
+    );
+    source.seat_id = Some("seat-uuid-1".into());
+
+    let debug = format!("{source:?}");
+
+    assert!(!debug.contains(canary), "Debug output leaked a credential");
+    assert!(debug.contains("<redacted 17 bytes>"), "got {debug}");
+    // Non-secret shape stays readable for debugging.
+    for readable in [
+        "gateway",
+        "https://gw.example",
+        "ANTHROPIC_API_KEY",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "seat-uuid-1",
+    ] {
+        assert!(debug.contains(readable), "missing {readable} in {debug}");
+    }
+}
+
 #[test]
 fn state_file_path_uses_well_known_layout() {
     let path = state_file_path(Path::new("/home/x/.proliferate/anyharness"));
@@ -343,7 +377,10 @@ fn clear_state_file_resets_sequence_lineage_for_native_then_new_route() {
     let adopted = load_state_file(home.path())
         .expect("load adopted state")
         .expect("adopted state");
-    assert_eq!((adopted.sequence, adopted.lineage.as_str()), (1, "lineage-b"));
+    assert_eq!(
+        (adopted.sequence, adopted.lineage.as_str()),
+        (1, "lineage-b")
+    );
 }
 
 /// A push from a DIFFERENT lineage is refused with the typed code and leaves

@@ -6,7 +6,7 @@ Use this runbook to provision, rotate, revoke, audit, or manually verify the
 daily `Catalog Probe` workflow. The durable catalog producer contract lives in
 [Agent Distribution](../../specs/systems/harnesses/distribution.md),
 and the workflow's delivery role lives in the
-[Delivery system](../../specs/engineering/shipping/release-delivery.md).
+[Delivery system](../../specs/engineering/ci-cd/release-delivery.md).
 
 ## Ownership And Boundaries
 

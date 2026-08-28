@@ -481,7 +481,7 @@ async fn captured_objects_survive_an_aggressive_gc() {
 /// Archive ref sweeping must ignore checkpoint refs.
 #[tokio::test]
 async fn the_archive_sweep_leaves_checkpoint_refs_untouched() {
-    let _env = EnvGuard::off();
+    let _env = EnvGuard::off().await;
     let harness = Harness::new("isolation");
     harness.worktree_workspace("ws-1");
     harness.make_checkpoint(

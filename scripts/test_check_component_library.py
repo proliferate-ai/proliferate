@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from scripts import check_component_library as check_module
@@ -16,10 +16,8 @@ from scripts.check_component_library import (
     kit_violations,
     parse_registry,
     registry_violations,
-    resolve_specifier,
     tier_file_violations,
 )
-
 
 DOC = """
 ### The sanctioned index
@@ -70,7 +68,7 @@ class RegistryParsingTest(unittest.TestCase):
 class HandRolledRoleTest(unittest.TestCase):
     def test_reports_literal_and_conditional_overlay_roles(self) -> None:
         source = (
-            'export function A() {\n'
+            "export function A() {\n"
             '  return <div role="dialog">\n'
             '    <span role={onSelect ? "button" : undefined} />\n'
             '    <b role="listitem" />\n'
@@ -141,9 +139,7 @@ class ImportGraphTest(unittest.TestCase):
         component.write_text("export function Widget() {}\n")
         consumer = tmp / "Surface.tsx"
         consumer.write_text(consumer_source)
-        return build_importers(
-            {component: component.read_text(), consumer: consumer_source}
-        )
+        return build_importers({component: component.read_text(), consumer: consumer_source})
 
     def test_a_real_import_is_a_call_site(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -183,8 +179,7 @@ class RegistryRuleTest(unittest.TestCase):
             rows, sources = self.build(tmp)
             with mock.patch.object(check_module, "DESIGN_SYSTEM_DOC", tmp / "DOC.md"):
                 rule_ids = {
-                    violation.rule_id
-                    for violation in registry_violations(rows, sources, {})
+                    violation.rule_id for violation in registry_violations(rows, sources, {})
                 }
             self.assertIn("dead-library-component", rule_ids)
             self.assertIn("missing-library-jsdoc", rule_ids)
@@ -216,8 +211,7 @@ class RegistryRuleTest(unittest.TestCase):
             ]
             with mock.patch.object(check_module, "DESIGN_SYSTEM_DOC", tmp / "DOC.md"):
                 rule_ids = {
-                    violation.rule_id
-                    for violation in registry_violations(rows, sources, {})
+                    violation.rule_id for violation in registry_violations(rows, sources, {})
                 }
             self.assertEqual(rule_ids, {"expired-incubating-note"})
 
@@ -367,9 +361,7 @@ class TierFileTest(unittest.TestCase):
             part = patterns / "secrets" / "SecretRow.tsx"
             part.write_text("export const SecretRow = 1;\n")
             outsider = primitives / "Button.tsx"
-            violations = self.run_rule(
-                root, primitives, patterns, importers={part: {outsider}}
-            )
+            violations = self.run_rule(root, primitives, patterns, importers={part: {outsider}})
             self.assertEqual(
                 [violation.rule_id for violation in violations],
                 ["tier-file-without-registry-row"],

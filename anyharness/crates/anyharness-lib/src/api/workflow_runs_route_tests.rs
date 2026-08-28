@@ -19,8 +19,8 @@ use super::router::build_router;
 use crate::app::{test_support, AppState};
 use crate::domains::repo_roots::model::CreateRepoRootInput;
 use crate::domains::sessions::runtime::prompt_message_actor_tests::{
-    build_state, install_scripted_agent_env, temp_runtime_home, write_scripted_agent,
-    EnvVarGuard, ScriptedAgent,
+    build_state, install_scripted_agent_env, temp_runtime_home, write_scripted_agent, EnvVarGuard,
+    ScriptedAgent,
 };
 use crate::domains::workflows::model::WorkflowRunStatus;
 use crate::domains::workspaces::managed_root::{
@@ -61,7 +61,7 @@ pub(crate) struct RouteFixture {
     _agent_env: (EnvVarGuard, EnvVarGuard),
     _data_key: test_support::DataKeyEnvGuard,
     _bearer: test_support::BearerTokenEnvGuard,
-    _env_lock: std::sync::MutexGuard<'static, ()>,
+    _env_lock: tokio::sync::MutexGuard<'static, ()>,
 }
 
 impl Drop for RouteFixture {
@@ -93,8 +93,8 @@ pub(crate) fn git(dir: &Path, args: &[&str]) {
     );
 }
 
-pub(crate) fn fixture(label: &str) -> RouteFixture {
-    let env_lock = test_support::lock_env();
+pub(crate) async fn fixture(label: &str) -> RouteFixture {
+    let env_lock = test_support::lock_env().await;
     let bearer = test_support::set_bearer_token_env(None);
     let data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home(label);
@@ -264,7 +264,7 @@ pub(crate) fn single_node_definition(prompt: &str) -> Value {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn put_places_a_run_idempotently_and_the_wire_shape_holds() {
-    let fixture = fixture("wf-route-put");
+    let fixture = fixture("wf-route-put").await;
     let run_id = run_uuid(0x01);
     let uri = format!("/v1/workflow-runs/{run_id}");
     let body = fixture.snapshot(single_node_definition("blocking turn"));
@@ -317,7 +317,10 @@ async fn put_places_a_run_idempotently_and_the_wire_shape_holds() {
     let (status, replay) = fixture.request(Method::PUT, &uri, Some(body)).await;
     assert_eq!(status, StatusCode::OK, "{replay}");
     assert_eq!(replay["run"]["id"], json!(run_id));
-    assert_eq!(replay["run"]["workspaceId"], projection["run"]["workspaceId"]);
+    assert_eq!(
+        replay["run"]["workspaceId"],
+        projection["run"]["workspaceId"]
+    );
     assert_eq!(
         replay["nodes"][0]["id"], projection["nodes"][0]["id"],
         "replay returns the stored rows, not fresh ones"
@@ -333,7 +336,7 @@ async fn put_places_a_run_idempotently_and_the_wire_shape_holds() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn put_rejects_an_invalid_snapshot_with_zero_rows() {
-    let fixture = fixture("wf-route-invalid");
+    let fixture = fixture("wf-route-invalid").await;
     let run_id = run_uuid(0x02);
     let uri = format!("/v1/workflow-runs/{run_id}");
     let body = fixture.snapshot(json!({
@@ -357,12 +360,16 @@ async fn put_rejects_an_invalid_snapshot_with_zero_rows() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn put_rejects_bad_identities_and_bodies_as_invalid_snapshots() {
-    let fixture = fixture("wf-route-identity");
+    let fixture = fixture("wf-route-identity").await;
     let body = fixture.snapshot(single_node_definition("never launches"));
 
     // A non-UUID run id never reaches the path/branch laws (Ruling C).
     let (status, problem) = fixture
-        .request(Method::PUT, "/v1/workflow-runs/run-route", Some(body.clone()))
+        .request(
+            Method::PUT,
+            "/v1/workflow-runs/run-route",
+            Some(body.clone()),
+        )
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{problem}");
     assert_eq!(problem["code"], "WORKFLOW_SNAPSHOT_INVALID");
@@ -390,7 +397,7 @@ async fn put_rejects_bad_identities_and_bodies_as_invalid_snapshots() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn put_rejects_an_unknown_repo_root_id_as_an_invalid_snapshot() {
-    let fixture = fixture("wf-route-unknown-root");
+    let fixture = fixture("wf-route-unknown-root").await;
     let run_id = run_uuid(0x04);
     let uri = format!("/v1/workflow-runs/{run_id}");
     let mut body = fixture.snapshot(single_node_definition("never launches"));
@@ -409,7 +416,7 @@ async fn put_rejects_an_unknown_repo_root_id_as_an_invalid_snapshot() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn reads_project_from_rows_and_the_list_envelope_filters() {
-    let fixture = fixture("wf-route-reads");
+    let fixture = fixture("wf-route-reads").await;
     let ghost = run_uuid(0x05);
     let (status, problem) = fixture
         .request(Method::GET, &format!("/v1/workflow-runs/{ghost}"), None)
@@ -441,7 +448,11 @@ async fn reads_project_from_rows_and_the_list_envelope_filters() {
     assert_eq!(listed["runs"][0]["id"], json!(run_id));
 
     let (status, empty) = fixture
-        .request(Method::GET, "/v1/workflow-runs?workspace_id=elsewhere", None)
+        .request(
+            Method::GET,
+            "/v1/workflow-runs?workspace_id=elsewhere",
+            None,
+        )
         .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(empty["runs"].as_array().map(Vec::len), Some(0));
@@ -504,7 +515,7 @@ async fn capture_logs<F: std::future::Future>(future: F) -> (String, F::Output) 
 /// event fires only on the path that committed rows.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn put_emits_named_acceptance_and_materialization_events() {
-    let fixture = fixture("wf-route-put-obs");
+    let fixture = fixture("wf-route-put-obs").await;
     let run_id = run_uuid(0x0b);
     let uri = format!("/v1/workflow-runs/{run_id}");
     let body = fixture.snapshot(single_node_definition("blocking turn"));
@@ -522,7 +533,10 @@ async fn put_emits_named_acceptance_and_materialization_events() {
         .lines()
         .find(|line| line.contains("anyharness.workflow_workspace_materialized"))
         .expect("named materialization event captured");
-    assert!(materialized_line.contains("doc_count"), "{materialized_line}");
+    assert!(
+        materialized_line.contains("doc_count"),
+        "{materialized_line}"
+    );
     assert!(
         materialized_line.contains(run_id.as_str()),
         "{materialized_line}"

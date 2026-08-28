@@ -18,7 +18,8 @@ Usage:
     STRIPE_API_KEY=sk_live_... python server/scripts/mint_pro_promo_codes.py --csv people.csv
 
     # preview without creating anything:
-    STRIPE_API_KEY=sk_live_... python server/scripts/mint_pro_promo_codes.py --person "Cara:cara@x.com" --dry-run
+    STRIPE_API_KEY=sk_live_... python server/scripts/mint_pro_promo_codes.py \
+        --person "Cara:cara@x.com" --dry-run
 
 Notes:
     * The default coupon waives 100% for 2 months. Because the Pro seat price and
@@ -27,6 +28,7 @@ Notes:
       early-access). Change --coupon to use a different policy.
     * Codes are created in whatever mode the key is (live key -> live codes).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -67,7 +69,9 @@ def _request(method: str, path: str, key: str, params: dict | None = None) -> di
     except urllib.error.HTTPError as exc:
         body = json.loads(exc.read() or b"{}")
         err = body.get("error", {})
-        raise RuntimeError(f"{exc.code} {err.get('code','')}: {err.get('message', exc.reason)}") from None
+        raise RuntimeError(
+            f"{exc.code} {err.get('code', '')}: {err.get('message', exc.reason)}"
+        ) from None
 
 
 def slug(name: str, email: str) -> str:
@@ -95,7 +99,7 @@ def existing_code_for_email(key: str, coupon: str, email: str) -> str | None:
         params["starting_after"] = page["data"][-1]["id"]
 
 
-def parse_people(args) -> list[tuple[str, str]]:
+def parse_people(args: argparse.Namespace) -> list[tuple[str, str]]:
     people: list[tuple[str, str]] = []
     for entry in args.person or []:
         name, _, email = entry.partition(":")
@@ -131,7 +135,9 @@ def main() -> int:
     ap.add_argument("--person", action="append", help="'Name:email' (repeatable)")
     ap.add_argument("--csv", help="CSV file with name,email per line")
     ap.add_argument("--coupon", default=os.environ.get("STRIPE_PROMO_COUPON_ID", DEFAULT_COUPON))
-    ap.add_argument("--redeem-days", type=int, default=30, help="days until code expires (default 30)")
+    ap.add_argument(
+        "--redeem-days", type=int, default=30, help="days until code expires (default 30)"
+    )
     ap.add_argument("--dry-run", action="store_true", help="preview without creating codes")
     args = ap.parse_args()
 
@@ -149,9 +155,11 @@ def main() -> int:
         sys.exit(f"Coupon {args.coupon} is not valid.")
     expires_at = int(time.time()) + args.redeem_days * 86400
 
-    print(f"Coupon {args.coupon}: {coup.get('percent_off')}% off, {coup.get('duration')} "
-          f"{coup.get('duration_in_months') or ''} | redeem window {args.redeem_days}d"
-          f"{'  [DRY-RUN]' if args.dry_run else ''}\n")
+    print(
+        f"Coupon {args.coupon}: {coup.get('percent_off')}% off, {coup.get('duration')} "
+        f"{coup.get('duration_in_months') or ''} | redeem window {args.redeem_days}d"
+        f"{'  [DRY-RUN]' if args.dry_run else ''}\n"
+    )
     rows = []
     for name, email in people:
         existing = existing_code_for_email(key, args.coupon, email)

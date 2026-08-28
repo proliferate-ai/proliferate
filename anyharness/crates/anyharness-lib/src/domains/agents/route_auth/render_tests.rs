@@ -31,7 +31,6 @@ impl GatewayModelResolve for HarnessPlanResolver {
         match harness_kind {
             "opencode" => GatewayModelPlan {
                 models: OPENCODE_LIVE_MODELS.iter().map(|m| m.to_string()).collect(),
-                ..Default::default()
             },
             _ => GatewayModelPlan::default(),
         }
@@ -99,12 +98,20 @@ fn claude_gateway_sets_base_url_token_and_sanitizes_ambient() {
         .expect("CLAUDE_CONFIG_DIR");
     assert!(config_dir.contains("claude-config"));
     assert!(std::path::Path::new(config_dir).is_dir());
-    // Ambient Bedrock/Vertex + stale api key removed.
+    // Ambient Bedrock/Vertex + stale api key removed — and the model-selector
+    // family with them (session model selection comes from the product's
+    // launch config, never the host machine).
     for key in [
         "CLAUDE_CODE_USE_BEDROCK",
         "CLAUDE_CODE_USE_VERTEX",
         "AWS_BEARER_TOKEN_BEDROCK",
         "ANTHROPIC_API_KEY",
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_SMALL_FAST_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ANTHROPIC_BEDROCK_REGION_PREFIX",
     ] {
         assert!(
             rendered.remove.contains(&key.to_string()),
@@ -543,6 +550,36 @@ fn state_file_path_snapshot() {
         path,
         std::path::PathBuf::from("/home/u/.proliferate/anyharness/agent-auth/state.json")
     );
+}
+
+/// `RenderedRouteAuth`'s `Debug` is hand-written to redact by construction
+/// (repo law: never print a secret; length-only telemetry): `set`'s VALUES are
+/// the composed launch credentials, so an end-to-end rendered delta debug-
+/// formatted (e.g. by an `assert_eq!` panic in these very tests) must not be
+/// able to reproduce the key, while the env-var NAMES and the removals stay
+/// readable.
+#[test]
+fn rendered_route_auth_debug_redacts_set_values() {
+    let canary = "sk-canary-fixture"; // 17 bytes: pins the marker exactly.
+    let home = TempHome::new("render-debug-redaction");
+    home.write_state_json(&v2_state(
+        1,
+        vec![harness(
+            "claude",
+            vec![json!({ "kind": "gateway", "base_url": GATEWAY_BASE_URL, "key": canary })],
+        )],
+    ));
+
+    let rendered =
+        resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
+    let debug = format!("{rendered:?}");
+
+    assert!(
+        !debug.contains(canary),
+        "Debug output leaked the gateway key: {debug}"
+    );
+    assert!(debug.contains("<redacted 17 bytes>"), "got {debug}");
+    assert!(debug.contains("ANTHROPIC_AUTH_TOKEN"), "got {debug}");
 }
 
 #[path = "seat_render_tests.rs"]

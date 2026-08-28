@@ -212,7 +212,7 @@ mod unix {
     async fn initially_cancelled_consumes_authority_without_opening() {
         let admission = ExportAdmission::shared_capacity_one();
         let (invocation, drops) = invocation_with_probe(Duration::from_secs(25));
-        let (mut signals, receivers) = signals();
+        let (signals, receivers) = signals();
         signals
             .cancellation
             .as_ref()

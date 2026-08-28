@@ -94,7 +94,7 @@ function cellFor(cellName: string): PlannedCellV1 {
   return {
     cell_id: `${SELFHOST_INSTALL_1_ID}/selfhost/cell=${cellName},harness=claude`,
     scenario_id: SELFHOST_INSTALL_1_ID,
-    registry_flow_ref: "specs/engineering/testing/flows.md#selfhost-install",
+    registry_flow_ref: "tests/release/core-release-scenario-manifest.json#selfhost-install",
     runtime_lane: "selfhost",
     dimensions: { cell: cellName, harness: "claude" },
     required_env: [],

@@ -3,8 +3,8 @@
 # Provision (and tear down) a fresh, throwaway self-hosted Proliferate control
 # plane on EC2 the way an operator does — the production compose bundle
 # (server/deploy/**) on a stock Ubuntu box, single-org, sslip.io hostname with
-# real Caddy-issued TLS. Used by the T3-SH-1 (cold boot to second user) and
-# T4-SH-1 (operator update motion) release-e2e scenarios so each can stand up
+# real Caddy-issued TLS. Used by the
+# T4-SH-1 (operator update motion) release-e2e scenario so it can stand up
 # and destroy its own instance, gated behind the RELEASE_E2E_SELFHOST_PROVISION
 # opt-in (cost control) in the scenarios themselves.
 #

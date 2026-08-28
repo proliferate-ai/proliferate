@@ -9,7 +9,7 @@ importable in isolation.
 
 from __future__ import annotations
 
-from proliferate.server.agent_auth.enrollment import (
+from proliferate.server.ai_gateway.enrollment import (
     build_enrollment_key_fingerprint,
     build_enrollment_key_set_fingerprint,
 )

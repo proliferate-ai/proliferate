@@ -7,6 +7,21 @@ edition = "2021"
 license = "AGPL-3.0"
 repository = "https://github.com/proliferate-ai/proliferate"
 
+# The clippy constitution (ruled 2026-08-26, lint wiring): CI runs
+# `cargo clippy --workspace --all-targets -- -D warnings`; every member crate
+# opts in with `[lints] workspace = true`. Only judgment lints are allowed
+# here — style opinions the codebase does not share; PROVISIONAL, re-ruled
+# during the code-debt migration. `await_holding_lock` exited this list on
+# 2026-08-27 by FIX, not allow: all 123 sites were one test-support mutex
+# (now tokio::sync) plus one lexical false positive — see the retired
+# AH-CLIPPY-1 record in lints/anyharness/native-debt.toml. It now rides
+# `-D warnings` as law.
+[workspace.lints.clippy]
+result_large_err = "allow"
+too_many_arguments = "allow"
+type_complexity = "allow"
+large_enum_variant = "allow"
+
 [profile.dev]
 # Keep file/line backtraces for workspace crates without paying for full
 # variable-level debug info (DWARF). Cuts rlib size, link memory, and disk.

@@ -295,6 +295,7 @@ async def move_agent_gateway_free_credit_allocation(
     *,
     from_billing_subject_id: UUID,
     to_billing_subject_id: UUID,
+    github_provider_user_id: str | None = None,
 ) -> int:
     """Re-point a claimed agent-gateway free-credit allocation at a new subject.
 
@@ -305,17 +306,86 @@ async def move_agent_gateway_free_credit_allocation(
     "personal claim blocks" into "personal claim converted": the identity
     stays claimed exactly once, now by the org subject. Idempotent: a second
     call matches no rows. Returns the number of allocations moved.
+
+    ``github_provider_user_id`` narrows the move to ONE identity's claim: the
+    orphan-reclaim path passes it so a second human's allocation that happens
+    to ride the same source subject can never be dragged along. The D-3 call
+    sites move a personal subject, which by construction holds only its own
+    user's claims, and pass nothing.
     """
+    query = sa_update(FreeCloudAllocation).where(
+        FreeCloudAllocation.allocation_kind
+        == FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
+        FreeCloudAllocation.billing_subject_id == from_billing_subject_id,
+    )
+    if github_provider_user_id is not None:
+        query = query.where(FreeCloudAllocation.github_provider_user_id == github_provider_user_id)
     result = await db.execute(
-        sa_update(FreeCloudAllocation)
-        .where(
-            FreeCloudAllocation.allocation_kind
-            == FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
-            FreeCloudAllocation.billing_subject_id == from_billing_subject_id,
-        )
-        .values(billing_subject_id=to_billing_subject_id, updated_at=utcnow())
+        query.values(billing_subject_id=to_billing_subject_id, updated_at=utcnow())
     )
     return result.rowcount or 0
+
+
+async def get_linked_github_provider_user_id(db: AsyncSession, user_id: UUID) -> str | None:
+    """The user's linked GitHub identity, or ``None`` — the dedupe key itself.
+
+    Public read for callers that must reason about the identity explicitly
+    (the orphan reclaim's purity checks; the zero-grant guard's paging
+    classification) rather than through the reserve's boolean.
+    """
+    return await _linked_github_provider_user_id(db, user_id)
+
+
+async def get_agent_gateway_free_credit_allocation_owner(
+    db: AsyncSession,
+    *,
+    github_provider_user_id: str,
+    period_key: str,
+) -> BillingSubject | None:
+    """The billing subject currently holding this identity's allocation.
+
+    Read-side companion of ``ensure_agent_gateway_free_credit_allocation``:
+    resolves the ``free_cloud_allocation`` row for (agent-gateway kind, the
+    GitHub identity, ``period_key``) to the subject that owns the claim
+    today; ``None`` when the identity holds no claim yet. Callers use this to
+    tell whether a "claimed elsewhere" refusal points at a live claimant (the
+    anti-abuse dedupe working as intended) or at an orphan a deleted account
+    left behind.
+    """
+    owner_subject_id = await db.scalar(
+        select(FreeCloudAllocation.billing_subject_id).where(
+            FreeCloudAllocation.allocation_kind
+            == FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
+            FreeCloudAllocation.github_provider_user_id == github_provider_user_id,
+            FreeCloudAllocation.period_key == period_key,
+        )
+    )
+    if owner_subject_id is None:
+        return None
+    return await db.get(BillingSubject, owner_subject_id)
+
+
+async def count_agent_gateway_free_credit_allocations_for_subject(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    github_provider_user_id: str | None = None,
+) -> int:
+    """How many agent-gateway free-credit claims a subject currently holds.
+
+    The orphan reclaim's foreign-claim probe: a subject holding any claim
+    beyond the reclaiming identity's own (``github_provider_user_id`` narrows
+    to one identity) must never be auto-drained — moving its ledger would
+    take another human's claim history with it.
+    """
+    query = select(func.count()).where(
+        FreeCloudAllocation.allocation_kind
+        == FREE_CLOUD_ALLOCATION_KIND_AGENT_GATEWAY_FREE_CREDITS,
+        FreeCloudAllocation.billing_subject_id == billing_subject_id,
+    )
+    if github_provider_user_id is not None:
+        query = query.where(FreeCloudAllocation.github_provider_user_id == github_provider_user_id)
+    return int(await db.scalar(query) or 0)
 
 
 async def _linked_github_provider_user_id(db: AsyncSession, user_id: UUID) -> str | None:

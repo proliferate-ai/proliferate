@@ -209,14 +209,9 @@ fn issue_cause(
     to: &str,
     expires_at: Instant,
 ) -> SupportExportIssuanceError {
-    SupportExportPermit::issue(
-        preparation_id,
-        from.to_string(),
-        to.to_string(),
-        expires_at,
-    )
-    .err()
-    .expect("issuance is refused")
+    SupportExportPermit::issue(preparation_id, from.to_string(), to.to_string(), expires_at)
+        .err()
+        .expect("issuance is refused")
 }
 
 fn live() -> Instant {
@@ -230,7 +225,11 @@ fn expired() -> Instant {
 #[test]
 fn issuer_names_the_exact_noncanonical_window_cause_for_every_negative_window() {
     let cases = [
-        ("missing milliseconds", "2026-08-10T13:45:00Z", "2026-08-10T14:00:00Z"),
+        (
+            "missing milliseconds",
+            "2026-08-10T13:45:00Z",
+            "2026-08-10T14:00:00Z",
+        ),
         (
             "six fractional digits",
             "2026-08-10T13:45:00.000000Z",
@@ -364,7 +363,10 @@ fn the_strict_window_validator_still_accepts_only_fixed_millisecond_utc() {
         "2026-08-10T13:45:00.123Z",
         "2026-08-10T14:00:00.123Z"
     ));
-    assert!(!is_exact_support_window("2026-08-10T13:45:00Z", "2026-08-10T14:00:00Z"));
+    assert!(!is_exact_support_window(
+        "2026-08-10T13:45:00Z",
+        "2026-08-10T14:00:00Z"
+    ));
     assert!(!is_exact_support_window(
         "2026-08-10T13:45:00.123456Z",
         "2026-08-10T14:00:00.123456Z"

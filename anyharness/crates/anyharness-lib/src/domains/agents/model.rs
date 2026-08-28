@@ -518,8 +518,7 @@ pub struct SpawnSpec {
 pub use super::model_catalog::{
     ModelCatalogStatus, ModelLaunchRemediationKind, ModelLaunchRemediationMetadata,
     ModelRegistryMetadata, ModelRegistryModelMetadata, SessionDefaultControlKey,
-    SessionDefaultControlMetadata, SessionDefaultControlValueMetadata,
-    SessionDefaultControlsState,
+    SessionDefaultControlMetadata, SessionDefaultControlValueMetadata, SessionDefaultControlsState,
 };
 
 /// Machine-local resolved state for one artifact (native or agent-process).

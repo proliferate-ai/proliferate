@@ -26,16 +26,16 @@ import type {
 } from "../types.js";
 import type { PlannedCellV1, ResultReasonCode } from "../../runner/result.js";
 import type { Tier2BillingEvidenceV1 } from "../../evidence/schema.js";
-import type { BootedStack, StripeBillingEnv } from "../../../../intent/stack/boot.ts";
-import { REPO_ROOT } from "../../../../intent/stack/boot.ts";
-import type { BillingBootOptions, BillingBootResult } from "../../../../intent/stack/billing-boot.ts";
-import { bootBillingStack } from "../../../../intent/stack/billing-boot.ts";
-import type { BootWithFakeResult } from "../../../../intent/stack/billing-usage-import.ts";
+import type { BootedStack, StripeBillingEnv } from "./stack/boot.ts";
+import { REPO_ROOT } from "./stack/boot.ts";
+import type { BillingBootOptions, BillingBootResult } from "./stack/billing-boot.ts";
+import { bootBillingStack } from "./stack/billing-boot.ts";
+import type { BootWithFakeResult } from "./stack/billing-usage-import.ts";
 import {
   bootBillingStackWithLitellmFake,
   clearPublishedGatewayEnv,
-} from "../../../../intent/stack/billing-usage-import.ts";
-import { resetBillingState } from "../../../../intent/stack/billing-seed.ts";
+} from "./stack/billing-usage-import.ts";
+import { resetBillingState } from "./stack/billing-seed.ts";
 import {
   buildTier2BillingEvidence,
   createLedgerProbe,

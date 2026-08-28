@@ -40,7 +40,7 @@ const SAFE_DIAGNOSTIC_KEYS: &[&str] = &[
 fn diagnostic_key_leaf(key: &str) -> String {
     let normalized = key.to_ascii_lowercase();
     normalized
-        .rsplit(|character| matches!(character, ':' | '.'))
+        .rsplit([':', '.'])
         .next()
         .unwrap_or(normalized.as_str())
         .to_string()
@@ -259,7 +259,7 @@ fn find_secret_assignment(value: &str) -> Option<(usize, usize)> {
                 continue;
             }
             let end = secret_token_end(value, cursor);
-            if end > cursor && best.map_or(true, |(best_start, _)| index < best_start) {
+            if end > cursor && best.is_none_or(|(best_start, _)| index < best_start) {
                 best = Some((index, end));
             }
         }

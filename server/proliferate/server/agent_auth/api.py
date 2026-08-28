@@ -1,13 +1,12 @@
-"""HTTP routes for the agent-auth platform plus the agent-gateway account.
+"""HTTP routes for the agent-auth platform.
 
-Two prefixes out of this one module (S1, agent-auth.md/model-gateway.md
-API surface): ``router``/``organization_router`` serve ``/agent-auth``
-(key vault, selections, state, org policy); ``gateway_account_router``
-serves ``/agent-gateway`` (enrollment, capabilities — the gateway-account
-concerns model-gateway.md scopes that prefix to). Model catalogs moved out
-earlier: the cloud snapshot's routes live in their own ``agent_models``
-namespace (model-catalog.md §Cloud routes), named off both "gateway" (they
-serve every auth context) and "catalog".
+``router``/``organization_router`` serve ``/agent-auth`` (key vault,
+selections, state, org policy — the agent-auth.md API surface). The
+gateway-account routes (``/agent-gateway``: enrollment, capabilities) live
+in ``proliferate.server.ai_gateway.api``. Model catalogs moved out earlier:
+the cloud snapshot's routes live in their own ``agent_models`` namespace
+(model-catalog.md §Cloud routes), named off both "gateway" (they serve every
+auth context) and "catalog".
 """
 
 from __future__ import annotations
@@ -31,8 +30,6 @@ from proliferate.server.agent_auth.models import (
     AgentAuthStateAckRequest,
     AgentAuthStateResponse,
     AgentAuthSurface,
-    AgentGatewayCapabilitiesResponse,
-    AgentGatewayEnrollmentResponse,
     AgentProviderConfigCreateRequest,
     AgentSeatLimitHitRequest,
     OrgAgentPolicyResponse,
@@ -43,10 +40,8 @@ from proliferate.server.agent_auth.models import (
     auth_selection_payload,
     delivery_ack_payload,
     desired_source,
-    enrollment_payload,
     org_agent_policy_payload,
     org_agent_policy_violation_payload,
-    verification_verdict_payload,
 )
 from proliferate.server.api_errors import CloudApiError
 
@@ -56,12 +51,6 @@ organization_router = APIRouter(
     prefix="/organizations/{organization_id}/agent-auth",
     tags=["cloud-agent-auth"],
 )
-
-# Enrollment + capabilities are gateway-account concerns (model-gateway.md
-# API surface) and stay under /agent-gateway; every other route on `router`
-# (vault, selections, state) and every `organization_router` route (org
-# policy) moved to /agent-auth (agent-auth.md API surface).
-gateway_account_router = APIRouter(prefix="/agent-gateway", tags=["cloud-agent-gateway"])
 
 
 # --------------------------------------------------------------------------- #
@@ -309,44 +298,6 @@ async def ack_agent_auth_state_endpoint(
         fingerprint=body.fingerprint,
     )
     return delivery_ack_payload(record)
-
-
-# --------------------------------------------------------------------------- #
-# Capabilities + enrollment
-# --------------------------------------------------------------------------- #
-
-
-@gateway_account_router.get("/capabilities", response_model=AgentGatewayCapabilitiesResponse)
-async def get_agent_gateway_capabilities_endpoint(
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> AgentGatewayCapabilitiesResponse:
-    (
-        gateway_enabled,
-        public_base_url,
-        enrollment_status,
-        credits_exhausted,
-    ) = await service.get_capabilities(
-        db,
-        user_id=user.id,
-    )
-    verdicts = await service.get_verification_verdicts(db, user_id=user.id)
-    return AgentGatewayCapabilitiesResponse(
-        gateway_enabled=gateway_enabled,
-        public_base_url=public_base_url,
-        enrollment_status=enrollment_status,
-        credits_exhausted=credits_exhausted,
-        verifications=[verification_verdict_payload(record) for record in verdicts],
-    )
-
-
-@gateway_account_router.get("/enrollment", response_model=AgentGatewayEnrollmentResponse)
-async def get_agent_gateway_enrollment_endpoint(
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> AgentGatewayEnrollmentResponse:
-    record = await service.get_enrollment(db, user_id=user.id)
-    return enrollment_payload(record)
 
 
 # --------------------------------------------------------------------------- #

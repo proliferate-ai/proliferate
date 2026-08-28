@@ -390,7 +390,9 @@ impl SessionActor {
         seat_id: String,
         observation: crate::integrations::acp::provider_errors::SeatUsageLimitObservation,
     ) -> anyharness_contract::v1::ErrorEventDetails {
-        use crate::domains::agents::seat_cooling::{clamp_cooling_deadline, next_five_hour_window_top};
+        use crate::domains::agents::seat_cooling::{
+            clamp_cooling_deadline, next_five_hour_window_top,
+        };
         let now_epoch_s = chrono::Utc::now().timestamp();
         let cooling_until_epoch_s = clamp_cooling_deadline(
             now_epoch_s,

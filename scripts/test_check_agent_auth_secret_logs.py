@@ -139,6 +139,7 @@ class SafeSitesAccepted(unittest.TestCase):
 
     def test_seat_id_handle_is_safe(self) -> None:
         self.assertFalse(hit('tracing::warn!(%seat.seat_id, "seat cooling");', suffix=".rs"))
+
     def test_opaque_handle_is_safe(self) -> None:
         self.assertFalse(hit('logger.info("minted %s", virtual_key_id)'))
 

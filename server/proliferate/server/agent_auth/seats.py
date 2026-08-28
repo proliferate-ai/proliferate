@@ -32,7 +32,7 @@ from proliferate.constants.agent_gateway import (
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.agent_gateway import AgentApiKeyRecord
-from proliferate.server.agent_auth.budget import get_gateway_enrollment_for_user
+from proliferate.server.ai_gateway.budget import get_gateway_enrollment_for_user
 from proliferate.server.api_errors import CloudApiError
 from proliferate.server.event_logging import log_cloud_event
 

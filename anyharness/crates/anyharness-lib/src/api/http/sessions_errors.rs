@@ -188,7 +188,8 @@ pub(super) fn map_route_auth_error(error: &RouteAuthError) -> ApiError {
                 .expect("refusal-family variants map onto the LaunchRefusal vocabulary");
             ApiError::conflict(refusal.copy(), refusal.code())
         }
-        RouteAuthError::SelectionIncomplete { .. }
+        RouteAuthError::NoConfiguredSource { .. }
+        | RouteAuthError::SelectionIncomplete { .. }
         | RouteAuthError::UnsupportedRoute { .. }
         | RouteAuthError::UnknownHarness { .. }
         | RouteAuthError::StaleStateSequence { .. }

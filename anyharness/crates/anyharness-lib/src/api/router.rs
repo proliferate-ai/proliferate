@@ -12,8 +12,8 @@ use url::form_urlencoded;
 
 use super::http::{
     agent_auth::{
-        delete_agent_auth_state, get_agent_auth_methods, get_agent_auth_status,
-        put_agent_auth_state,
+        delete_agent_auth_state, dismiss_native_bridge, get_agent_auth_methods,
+        get_agent_auth_status, get_native_bridge, put_agent_auth_state,
     },
     agent_launch_options, agents, auth as http_auth, catalogs, cowork, files, git, goals, health,
     hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
@@ -80,6 +80,11 @@ pub fn build_router(state: AppState) -> Router {
             get(sse_agent_auth::stream_agent_auth_status),
         )
         .route("/agent-auth/methods", get(get_agent_auth_methods))
+        .route("/agent-auth/native-bridge", get(get_native_bridge))
+        .route(
+            "/agent-auth/native-bridge/{kind}",
+            delete(dismiss_native_bridge),
+        )
         // Catalogs (read-only: the runtime binary is the only transport)
         .route(
             "/catalogs/agents/version",

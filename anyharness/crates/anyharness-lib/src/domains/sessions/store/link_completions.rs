@@ -188,8 +188,7 @@ impl LinkCompletionStore {
             return Ok(Vec::new());
         }
         self.db.with_conn(|conn| {
-            let placeholders = std::iter::repeat("?")
-                .take(link_ids.len())
+            let placeholders = std::iter::repeat_n("?", link_ids.len())
                 .collect::<Vec<_>>()
                 .join(",");
             let sql = format!(
@@ -254,8 +253,7 @@ impl LinkCompletionStore {
             return Ok(Vec::new());
         }
         self.db.with_conn(|conn| {
-            let placeholders = std::iter::repeat("?")
-                .take(link_ids.len())
+            let placeholders = std::iter::repeat_n("?", link_ids.len())
                 .collect::<Vec<_>>()
                 .join(",");
             let sql = format!(

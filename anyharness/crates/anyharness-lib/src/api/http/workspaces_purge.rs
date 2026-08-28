@@ -10,7 +10,9 @@ use axum::{
 
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::domains::workspaces::deletion::purge::{WorkspacePurgeError, WorkspacePurgeOutcome as ServiceWorkspacePurgeOutcome};
+use crate::domains::workspaces::deletion::purge::{
+    WorkspacePurgeError, WorkspacePurgeOutcome as ServiceWorkspacePurgeOutcome,
+};
 
 /// The result of the up-front workspace-destruction admission snapshot: the
 /// held permits (dropped at end of the destructive operation) PLUS the SET of
@@ -120,6 +122,7 @@ pub(crate) mod purge_barriers {
 
     static BARRIERS: StdMutex<Option<HashMap<String, PurgeBarrier>>> = StdMutex::new(None);
 
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn install(workspace_id: &str, barrier: PurgeBarrier) {
         BARRIERS
             .lock()
@@ -128,6 +131,7 @@ pub(crate) mod purge_barriers {
             .insert(workspace_id.to_string(), barrier);
     }
 
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn clear(workspace_id: &str) {
         if let Some(map) = BARRIERS.lock().expect("purge barrier lock").as_mut() {
             map.remove(workspace_id);
@@ -204,7 +208,6 @@ fn map_purge_error(error: WorkspacePurgeError) -> ApiError {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use std::sync::Mutex;
 
     use super::*;
     use crate::app::test_support;
@@ -259,9 +262,8 @@ mod tests {
             seed_managed_worktree(&base, "workspace-http-active");
 
         let workspace_path_string = workspace_path.to_string_lossy().into_owned();
-        let state = test_state(runtime_home, &repo_root);
-        let workspace =
-            workspace_record("workspace-http-active", "active", &workspace_path_string);
+        let state = test_state(runtime_home, &repo_root).await;
+        let workspace = workspace_record("workspace-http-active", "active", &workspace_path_string);
         let store = WorkspaceStore::new(state.db.clone());
         store.insert(&workspace).expect("insert workspace");
 
@@ -275,7 +277,10 @@ mod tests {
             .find_by_id(&workspace.id)
             .expect("find workspace")
             .is_none());
-        assert!(!workspace_path.exists(), "the worktree checkout must be removed");
+        assert!(
+            !workspace_path.exists(),
+            "the worktree checkout must be removed"
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -299,7 +304,7 @@ mod tests {
             "an archived row's checkout is gone before DELETE is ever called"
         );
 
-        let state = test_state(runtime_home, &repo_root);
+        let state = test_state(runtime_home, &repo_root).await;
         let workspace = workspace_record(
             "workspace-http-archived",
             "archived",
@@ -323,7 +328,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn purge_workspace_is_idempotent_on_a_repeat_call() {
         let base = TempDirGuard::new("purge-http-idempotent");
-        let state = test_state(base.path().join("runtime"), &base.path().join("repo"));
+        let state = test_state(base.path().join("runtime"), &base.path().join("repo")).await;
         let response = purge_workspace(State(state), Path("workspace-does-not-exist".to_string()))
             .await
             .expect("purge missing workspace");
@@ -332,11 +337,8 @@ mod tests {
         assert!(response.already_deleted);
     }
 
-    fn test_state(runtime_home: PathBuf, repo_root_path: &std::path::Path) -> AppState {
-        let _lock = test_support::ENV_MUTEX
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("env mutex");
+    async fn test_state(runtime_home: PathBuf, repo_root_path: &std::path::Path) -> AppState {
+        let _lock = test_support::lock_env().await;
         let _bearer_guard = test_support::set_bearer_token_env(None);
         let _data_key_guard = test_support::set_data_key_env(None);
         let db = Db::open_in_memory().expect("open db");

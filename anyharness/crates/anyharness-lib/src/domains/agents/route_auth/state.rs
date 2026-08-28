@@ -73,7 +73,7 @@ pub fn state_file_path(runtime_home: &Path) -> PathBuf {
 ///   fields rather than reusing `env_var_name`/`value` (those are `api_key`'s
 ///   shape and reusing them would make the two kinds ambiguous to any
 ///   future shape check).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthSource {
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -97,6 +97,27 @@ pub struct AuthSource {
     /// `seat` only: the vault entry id of this seat (never key material).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seat_id: Option<String>,
+}
+
+/// Hand-written so the raw credential fields — `key` (virtual key), `value`
+/// (provider api key), and `env`'s values (seat/provider tokens) — can never
+/// reach `Debug` output; secrets must not be printable, even through a test
+/// panic. Every non-secret field (kinds, names, ids, base_url) stays readable.
+impl std::fmt::Debug for AuthSource {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use super::redact::{redacted, RedactedEnv};
+        formatter
+            .debug_struct("AuthSource")
+            .field("kind", &self.kind)
+            .field("base_url", &self.base_url)
+            .field("key", &self.key.as_deref().map(redacted))
+            .field("env_var_name", &self.env_var_name)
+            .field("value", &self.value.as_deref().map(redacted))
+            .field("config_kind", &self.config_kind)
+            .field("env", &self.env.as_ref().map(RedactedEnv))
+            .field("seat_id", &self.seat_id)
+            .finish()
+    }
 }
 
 /// One harness's enabled sources (contract §3). Composition is just "a list of

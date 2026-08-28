@@ -59,7 +59,7 @@ fn entry_for_path(path: String) -> Option<DroppedPathEntry> {
         .into_owned();
     let is_directory = metadata.is_dir();
     Some(DroppedPathEntry {
-        size: (!is_directory).then(|| metadata.len()),
+        size: (!is_directory).then_some(metadata.len()),
         path,
         name,
         is_directory,
@@ -128,8 +128,7 @@ mod tests {
         let file = dir.join("archive.zip");
         std::fs::write(&file, b"zip-bytes").expect("write temp file");
 
-        let file_entry =
-            entry_for_path(file.to_string_lossy().into_owned()).expect("file entry");
+        let file_entry = entry_for_path(file.to_string_lossy().into_owned()).expect("file entry");
         assert_eq!(file_entry.name, "archive.zip");
         assert!(!file_entry.is_directory);
         assert_eq!(file_entry.size, Some(9));

@@ -83,7 +83,7 @@ fn delivery_timing_uses_enqueue_time_for_queue_age() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn restarted_worker_repairs_retired_closed_turn_once_after_store_recovers() {
-    let _lock = test_support::lock_env();
+    let _lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let state = subagent_with_open_turn("worker-restart", true, false, true).await;
@@ -117,7 +117,7 @@ async fn restarted_worker_repairs_retired_closed_turn_once_after_store_recovers(
 
 #[tokio::test(flavor = "current_thread")]
 async fn worker_skips_live_closed_child_until_exact_handle_is_retired() {
-    let _lock = test_support::lock_env();
+    let _lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let state = subagent_with_open_turn("worker-live-gate", false, true, true).await;
@@ -145,7 +145,7 @@ async fn worker_skips_live_closed_child_until_exact_handle_is_retired() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn worker_repairs_open_current_link_but_not_promoted_session() {
-    let _lock = test_support::lock_env();
+    let _lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let open_state = subagent_with_open_turn("worker-open", false, true, false).await;
@@ -183,7 +183,7 @@ async fn worker_repairs_open_current_link_but_not_promoted_session() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn delivered_completion_injects_one_completion_event_into_the_parent_transcript() {
-    let _lock = test_support::lock_env();
+    let _lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let state = subagent_with_captured_completion().await;
@@ -219,7 +219,7 @@ async fn delivered_completion_injects_one_completion_event_into_the_parent_trans
 
 #[tokio::test(flavor = "current_thread")]
 async fn suppressed_completion_injects_metadata_without_a_wake_prompt() {
-    let _lock = test_support::lock_env();
+    let _lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let state = subagent_with_captured_completion().await;

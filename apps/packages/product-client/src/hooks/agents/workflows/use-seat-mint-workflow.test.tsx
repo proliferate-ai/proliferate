@@ -2,6 +2,7 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import { useSeatMintWorkflow } from "#product/hooks/agents/workflows/use-seat-mint-workflow";
 
 const mocks = vi.hoisted(() => ({
@@ -99,5 +100,55 @@ describe("useSeatMintWorkflow", () => {
     expect(mocks.claimAgentMintToken).toHaveBeenCalledTimes(1);
     expect(result.current.state.phase).toBe("idle");
     expect(result.current.state.error).toBeNull();
+  });
+
+  // A ready mint whose vault upload rejects with `uploadError`; returns the
+  // workflow's settled error string.
+  async function mintThatFailsUpload(uploadError: unknown): Promise<string | null> {
+    mocks.getAgentLoginTerminal.mockResolvedValue({ ...TERMINAL, mintStatus: "ready" });
+    mocks.startAgentLoginTerminal.mockResolvedValue({
+      agentLoginTerminal: TERMINAL,
+      message: null,
+    });
+    mocks.claimAgentMintToken.mockResolvedValue({ token: "sk-ant-oat01-token" });
+    mocks.mintSeatMutate.mockRejectedValue(uploadError);
+    mocks.closeAgentLoginTerminal.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() =>
+      useSeatMintWorkflow({
+        harnessKind: "claude",
+        connection: CONNECTION,
+        onSeatAdded: vi.fn(),
+      }),
+    );
+    await act(async () => {
+      await result.current.startMint({ email: "ops@acme.com", planTier: null });
+    });
+    // Flush the tick's get -> claim -> upload -> close chain.
+    await act(async () => {
+      for (let i = 0; i < 8; i += 1) await Promise.resolve();
+    });
+    expect(result.current.state.phase).toBe("error");
+    return result.current.state.error;
+  }
+
+  it("a 403 github_link_required upload names the real fix instead of asking for another sign-in", async () => {
+    // The server's typed gate (auth/dependencies.py `github_link_required`):
+    // single-org mode off + no GitHub link rejects every agent_auth route.
+    // "Re-run the sign-in" burns another Claude.ai mint into the same 403.
+    const error = await mintThatFailsUpload(
+      new ProliferateClientError(
+        "Connect GitHub before using Proliferate Cloud product surfaces.",
+        403,
+        "github_link_required",
+      ),
+    );
+    expect(error).toContain("Connect GitHub");
+    expect(error).not.toBe("Could not save the seat — re-run the sign-in.");
+  });
+
+  it("any other upload failure keeps the settled re-run copy", async () => {
+    const error = await mintThatFailsUpload(new Error("network flake"));
+    expect(error).toBe("Could not save the seat — re-run the sign-in.");
   });
 });

@@ -17,7 +17,7 @@ from proliferate.db.models.billing import BillingSubscription
 from proliferate.db.store import billing_subscriptions
 from proliferate.db.store import users as user_store
 from proliferate.integrations import stripe as stripe_billing
-from proliferate.server.agent_auth.signup_hook import (
+from proliferate.server.ai_gateway.signup_hook import (
     schedule_agent_gateway_org_enrollment,
 )
 from proliferate.server.billing.domain.pricing import (

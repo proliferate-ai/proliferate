@@ -90,7 +90,7 @@ function cfgCell(harness: string): PlannedCellV1 {
   return {
     cell_id: `T3-CFG-1/local/harness=${harness}`,
     scenario_id: "T3-CFG-1",
-    registry_flow_ref: "specs/engineering/testing/scenarios.md#T3-CFG-1",
+    registry_flow_ref: "tests/release/core-release-scenario-manifest.json#T3-CFG-1",
     runtime_lane: "local",
     dimensions: { harness },
     required_env: [],
@@ -101,7 +101,7 @@ function sessionCell(): PlannedCellV1 {
   return {
     cell_id: "T3-SESSION-1/local/harness=claude",
     scenario_id: "T3-SESSION-1",
-    registry_flow_ref: "specs/engineering/testing/tier-3-scenario-contract.md#local-5",
+    registry_flow_ref: "delivery/testing-cicd/archive/tier-3-scenario-contract.md#local-5",
     runtime_lane: "local",
     dimensions: { harness: "claude" },
     required_env: [],

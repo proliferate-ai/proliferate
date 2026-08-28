@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 use uuid::Uuid;
 
@@ -69,10 +68,7 @@ impl Drop for EnvVarGuard {
 
 #[tokio::test(flavor = "current_thread")]
 async fn idempotent_create_requires_exact_intent_and_current_observation() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("env mutex");
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let runtime_home = TestDir::new("anyharness-idempotent-session-create");
@@ -366,10 +362,7 @@ async fn model_scoped_control_refusal_is_atomic_and_valid_fable_intent_persists(
 
 #[tokio::test(flavor = "current_thread")]
 async fn unsupported_model_refusal_leaves_no_session_row_or_live_process() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("env mutex");
+    let _lock = test_support::lock_env().await;
     let _bearer_guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let runtime_home = TestDir::new("anyharness-gated-session-create");

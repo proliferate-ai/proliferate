@@ -75,7 +75,10 @@ Auth session state itself is host-owned (`ProductHost.auth`); the product reads 
 - **Setup never hard-blocks the first prompt.** The auth-setup step
   auto-advances after its grace window and the harness pane's ordinary
   pending indicator carries on; both outcomes latch so the card never
-  resurrects on a later manual edit.
+  resurrects on a later manual edit. (The grace-window auto-advance
+  retires with agent_auth slice 3, ruled 2026-08-27 — the step becomes
+  status-document-bound, advancing only on real completion, with each
+  badge's next-action affordance keeping the first prompt reachable.)
 - **Intent survives blockers.** The Home draft and deferred launch persist
   across a readiness change and resume through the normal launch path
   ([use-home-deferred-launch-runner.ts](../../../apps/packages/product-client/src/hooks/home/lifecycle/use-home-deferred-launch-runner.ts)).
@@ -155,7 +158,7 @@ apps/packages/product-client/src/
   [stripe-local-testing.md](../../../guides/local/stripe-local-testing.md)
   when billing checkout, portal, refill, or credit behavior is part of the
   change; the fuller matrix is in
-  [manual-release-qa.md](../../engineering/testing/manual-release-qa.md).
+  [manual-release-qa.md](../../../guides/deploying/manual-release-qa.md).
 
 ## Known gaps / follow-ups
 

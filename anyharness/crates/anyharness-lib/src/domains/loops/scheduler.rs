@@ -94,10 +94,10 @@ impl LoopScheduler {
 
     /// Arm (or re-arm) one emulated loop at its next fire instant.
     pub async fn arm(&self, session_id: &str, loop_id: &str, next_fire_at_ms: i64) {
-        self.armed
-            .lock()
-            .await
-            .insert((session_id.to_string(), loop_id.to_string()), next_fire_at_ms);
+        self.armed.lock().await.insert(
+            (session_id.to_string(), loop_id.to_string()),
+            next_fire_at_ms,
+        );
         self.wake.notify_one();
     }
 
@@ -127,6 +127,7 @@ impl LoopScheduler {
     }
 
     #[cfg(test)]
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) async fn armed_count(&self) -> usize {
         self.armed.lock().await.len()
     }
@@ -295,7 +296,12 @@ mod tests {
         assert_eq!(idle.fires.load(Ordering::SeqCst), 1);
         // Rescheduled to the reported next fire.
         assert_eq!(
-            *scheduler.armed.lock().await.get(&("s1".into(), "l1".into())).unwrap(),
+            *scheduler
+                .armed
+                .lock()
+                .await
+                .get(&("s1".into(), "l1".into()))
+                .unwrap(),
             5_000
         );
     }

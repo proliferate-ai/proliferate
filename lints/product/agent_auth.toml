@@ -12,7 +12,7 @@ owner = "product"
 status = "law"
 enforced_by = "scripts/check_agent_auth_secret_logs.py"
 mode = "lint"
-scope = "server/proliferate/server/agent_auth/**, server/proliferate/db/store/agent_gateway/**, server/proliferate/db/models/agent_gateway.py, server/proliferate/lib/infra/encryption/**, anyharness/crates/anyharness-lib/src/domains/agents/route_auth/**, anyharness/crates/anyharness-lib/src/domains/agents/seat_cooling/**, anyharness/crates/anyharness-lib/src/domains/agents/status/**, anyharness/crates/anyharness-lib/src/live/sessions/**"
+scope = "server/proliferate/server/agent_auth/**, server/proliferate/server/ai_gateway/**, server/proliferate/db/store/agent_gateway/**, server/proliferate/db/models/agent_gateway.py, server/proliferate/lib/infra/encryption/**, anyharness/crates/anyharness-lib/src/domains/agents/route_auth/**, anyharness/crates/anyharness-lib/src/domains/agents/seat_cooling/**, anyharness/crates/anyharness-lib/src/domains/agents/status/**, anyharness/crates/anyharness-lib/src/live/sessions/**"
 
 rule = """A structured-log or tracing call in the agent-auth surfaces must not
 contain a live secret identifier. Three shapes are banned: the provider env-var

@@ -25,7 +25,7 @@ async fn already_busy_target_queues_without_a_checkpoint_and_emits_skip_reason()
     // Hold the crate-wide env lock from actor startup through cleanup. The
     // first turn starts with capture disabled so the second dispatch can prove
     // that an already-busy target creates zero checkpoint artifacts.
-    let _capture = EnvGuard::off();
+    let _capture = EnvGuard::off().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("checkpoint-busy-target");
@@ -111,7 +111,7 @@ async fn already_busy_target_queues_without_a_checkpoint_and_emits_skip_reason()
 
 #[tokio::test(flavor = "current_thread")]
 async fn queued_settlement_expires_capture_without_touching_the_pending_prompt() {
-    let _capture = EnvGuard::on();
+    let _capture = EnvGuard::on().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = temp_runtime_home("checkpoint-post-capture-queued");

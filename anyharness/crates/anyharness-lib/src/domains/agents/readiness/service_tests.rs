@@ -16,7 +16,7 @@ fn make_temp_dir(prefix: &str) -> PathBuf {
 // The process-env guards + the lock that serializes their users.
 #[path = "test_env_guards.rs"]
 mod test_env_guards;
-use test_env_guards::{lock_env, EnvVarGuard, PathEnvGuard};
+use test_env_guards::{lock_env_blocking, EnvVarGuard, PathEnvGuard};
 
 #[test]
 fn parses_node_versions() {
@@ -198,7 +198,7 @@ fn registry_backed_binary_hint_launcher_requires_backing_binary() {
 
 #[test]
 fn registry_backed_binary_hint_does_not_resolve_superset_wrapper_as_agent_process() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let registry = built_in_registry();
     let cursor = registry
         .into_iter()
@@ -242,7 +242,7 @@ fn claude_compatibility_check_applies_to_direct_managed_npm_installs() {
 fn override_program_validation_requires_existing_executable() {
     // Reads PATH (bare `sh` resolves through it), so it must not run while a
     // PathEnvGuard has narrowed PATH to a temp dir.
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     assert!(!is_override_program_valid(Path::new(
         "/definitely/missing/agent-binary"
     )));
@@ -251,7 +251,7 @@ fn override_program_validation_requires_existing_executable() {
 
 #[test]
 fn override_launch_prepends_catalog_default_args() {
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let registry = built_in_registry();
     let codex = registry
         .into_iter()
@@ -420,7 +420,7 @@ fn route_upgrade_clears_only_credential_gaps_never_install() {
 fn resolve_launch_agent_matches_native_readiness_when_no_route_enrolled() {
     // With no agent-auth state file, launch readiness must be byte-for-byte
     // native readiness — the route path never changes a routeless agent.
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let registry = built_in_registry();
     let claude = registry
         .into_iter()
@@ -445,7 +445,7 @@ fn opencode_provider_managed_readiness_follows_its_selection_set_not_already_rea
     // so `apply_launch_route_upgrade`'s `already_ready` guard never let an
     // enrolled route (a selection) change opencode's readiness. Pins the fix:
     // nothing selected -> a real gap; enrolling a route -> it clears.
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let registry = built_in_registry();
     let opencode = registry
         .into_iter()
@@ -503,7 +503,7 @@ fn resolve_launch_agent_clears_a_gateway_routed_credential_gap() {
     // installed ACP process + absent XAI creds resolves to a CREDENTIAL gap
     // (LoginRequired), never InstallRequired — this exercises the credential
     // arm, not the install path.
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let registry = built_in_registry();
     let grok = registry
         .into_iter()
@@ -564,7 +564,7 @@ fn resolve_launch_agent_never_masks_a_missing_binary() {
     // enrolled gateway route must NOT flip that to Ready — the launcher still
     // has to exec a binary (Claude's ACP adapter shells out to the native
     // CLI via CLAUDE_CODE_EXECUTABLE).
-    let _env = lock_env();
+    let _env = lock_env_blocking();
     let registry = built_in_registry();
     let claude = registry
         .into_iter()

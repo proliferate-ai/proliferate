@@ -5,7 +5,7 @@ use super::*;
 
 #[tokio::test(flavor = "current_thread")]
 async fn file_backed_pending_capture_survives_restart_and_enqueues_once() {
-    let _lock = test_support::lock_env();
+    let _lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = std::env::temp_dir().join(format!(
@@ -139,7 +139,7 @@ async fn file_backed_pending_capture_survives_restart_and_enqueues_once() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn file_backed_closed_open_turn_is_repaired_by_restarted_worker() {
-    let _lock = test_support::lock_env();
+    let _lock = test_support::lock_env().await;
     let _bearer = test_support::set_bearer_token_env(None);
     let _data_key = test_support::set_data_key_env(None);
     let runtime_home = std::env::temp_dir().join(format!(
@@ -200,4 +200,3 @@ async fn file_backed_closed_open_turn_is_repaired_by_restarted_worker() {
     drop(restarted);
     std::fs::remove_dir_all(&runtime_home).expect("remove runtime home");
 }
-

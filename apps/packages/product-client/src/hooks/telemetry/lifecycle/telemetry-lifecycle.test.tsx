@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { render, fireEvent } from "@testing-library/react";
+import { act, render, fireEvent } from "@testing-library/react";
 import { Link, MemoryRouter } from "react-router-dom";
 
 import type {
@@ -12,8 +12,10 @@ import {
   makeTestProductHost,
   testAuthState,
 } from "#product/test/product-host-test-utils";
+import { useSessionSelectionStore } from "#product/stores/sessions/session-selection-store";
 import { useTelemetryRouteViews } from "#product/hooks/telemetry/lifecycle/use-telemetry-route-views";
 import { useTelemetryAuthIdentity } from "#product/hooks/telemetry/lifecycle/use-telemetry-auth-identity";
+import { useTelemetrySessionSelection } from "#product/hooks/telemetry/lifecycle/use-telemetry-session-selection";
 
 function spyTelemetry(): ProductTelemetry {
   return {
@@ -79,6 +81,39 @@ describe("useTelemetryRouteViews", () => {
     expect(telemetry.track).toHaveBeenCalledTimes(3);
     fireEvent.click(getByText("workflows-run"));
     expect(telemetry.track).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("useTelemetrySessionSelection", () => {
+  function SessionHarness() {
+    useTelemetrySessionSelection();
+    return null;
+  }
+
+  it("tags the active session id and clears it when no session is open", () => {
+    const telemetry = spyTelemetry();
+    const host = makeTestProductHost({ overrides: { telemetry } });
+    render(
+      <ProductHostProvider host={host}>
+        <SessionHarness />
+      </ProductHostProvider>,
+    );
+
+    // Mount with no active session: the tag is explicitly cleared, never stale.
+    expect(telemetry.setTag).toHaveBeenCalledWith("session_id", "");
+
+    act(() => {
+      useSessionSelectionStore.setState({ activeSessionId: "11111111-2222-4333-8444-555555555555" });
+    });
+    expect(telemetry.setTag).toHaveBeenLastCalledWith(
+      "session_id",
+      "11111111-2222-4333-8444-555555555555",
+    );
+
+    act(() => {
+      useSessionSelectionStore.setState({ activeSessionId: null });
+    });
+    expect(telemetry.setTag).toHaveBeenLastCalledWith("session_id", "");
   });
 });
 

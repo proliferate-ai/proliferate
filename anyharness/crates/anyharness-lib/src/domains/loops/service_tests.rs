@@ -96,7 +96,12 @@ fn ingest_upserted_edits_in_place() {
     let mut edited = wire("cron-1", "ping twice", LoopWireStatus::Active);
     edited.updated_at_ms = 2;
     service
-        .ingest_native_event(context(2), LoopNativeEventKind::Upserted, Some(edited), None)
+        .ingest_native_event(
+            context(2),
+            LoopNativeEventKind::Upserted,
+            Some(edited),
+            None,
+        )
         .expect("ingest edit");
 
     let current = service
@@ -152,9 +157,7 @@ fn multiple_loops_coexist_per_session() {
         )
         .expect("ingest loop 2");
 
-    let mut current = service
-        .current_loops("session-1")
-        .expect("load current");
+    let mut current = service.current_loops("session-1").expect("load current");
     current.sort_by(|a, b| a.loop_id.cmp(&b.loop_id));
     assert_eq!(current.len(), 2);
     assert_eq!(current[0].loop_id, "cron-1");
@@ -322,7 +325,10 @@ fn observer_ingests_loop_upserted_chunk() {
     );
 
     assert_eq!(effects.persisted_events.len(), 1);
-    assert_eq!(effects.persisted_events[0].event.event_type(), "loop_upserted");
+    assert_eq!(
+        effects.persisted_events[0].event.event_type(),
+        "loop_upserted"
+    );
     let loops = service.current_loops("session-1").expect("load current");
     assert_eq!(loops.len(), 1);
     assert_eq!(loops[0].loop_id, "cron-1");
@@ -390,7 +396,10 @@ fn observer_ingests_loop_fired_and_removed_chunks() {
         SessionObservation::NonTranscriptChunk(&removed),
     );
     assert_eq!(effects.persisted_events.len(), 1);
-    assert_eq!(effects.persisted_events[0].event.event_type(), "loop_removed");
+    assert_eq!(
+        effects.persisted_events[0].event.event_type(),
+        "loop_removed"
+    );
     assert!(service
         .current_loops("session-1")
         .expect("load current")
@@ -429,7 +438,11 @@ fn observer_ignores_unrelated_and_malformed_chunks() {
         .is_empty());
 }
 
-fn emulated_spec(loop_id: &str, max_fires: Option<i64>, next_fire_at_ms: i64) -> super::service::EmulatedLoopSpec {
+fn emulated_spec(
+    loop_id: &str,
+    max_fires: Option<i64>,
+    next_fire_at_ms: i64,
+) -> super::service::EmulatedLoopSpec {
     super::service::EmulatedLoopSpec {
         loop_id: loop_id.to_string(),
         prompt: "ping".to_string(),
@@ -460,7 +473,10 @@ fn arm_emulated_loop_creates_native_false_record_and_emits_upserted() {
     ));
     // The scheduler re-arm read sees it.
     assert_eq!(
-        service.active_emulated_loops("session-1").expect("list").len(),
+        service
+            .active_emulated_loops("session-1")
+            .expect("list")
+            .len(),
         1
     );
 }
@@ -472,11 +488,17 @@ fn arm_emulated_loop_caps_active_loops_per_session_but_allows_edits() {
     for i in 0..MAX_ACTIVE_EMULATED_LOOPS {
         // Distinct next_seq per arm (session_events.seq is unique per session).
         service
-            .arm_emulated_loop(context(i as i64 + 1), emulated_spec(&format!("loop-{i}"), None, 1_000))
+            .arm_emulated_loop(
+                context(i as i64 + 1),
+                emulated_spec(&format!("loop-{i}"), None, 1_000),
+            )
             .expect("arm within cap");
     }
     assert_eq!(
-        service.active_emulated_loops("session-1").expect("list").len(),
+        service
+            .active_emulated_loops("session-1")
+            .expect("list")
+            .len(),
         MAX_ACTIVE_EMULATED_LOOPS
     );
 

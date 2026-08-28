@@ -162,6 +162,7 @@ impl CountingPlanProducer {
         }
     }
 
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn fetches(&self) -> usize {
         self.fetch_count.load(Ordering::SeqCst)
     }
@@ -211,11 +212,17 @@ impl GatewayModelResolve for CountingPlanProducer {
 #[derive(Debug, Clone)]
 pub(crate) enum FakeBehavior {
     Ok,
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     Fail(String),
     /// Fast-fail as a spawn failure — the harness binary could not be started.
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     Spawn(String),
     /// Sleep this long before answering — used with a paused clock to exercise the
     /// timeout path deterministically.
+    #[allow(dead_code)]
+    // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     Sleep(Duration),
 }
 
@@ -255,10 +262,12 @@ impl FakeRunner {
         self.invocations.load(Ordering::SeqCst)
     }
 
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn peak_concurrency(&self) -> usize {
         self.max_in_flight.load(Ordering::SeqCst)
     }
 
+    #[allow(dead_code)] // AH-CLIPPY-2: flagged dead by lint wiring 2026-08-27; owner deletes or revives
     pub(crate) fn set_behavior(&self, behavior: FakeBehavior) {
         *self.behavior.lock().expect("behavior poisoned") = behavior;
     }

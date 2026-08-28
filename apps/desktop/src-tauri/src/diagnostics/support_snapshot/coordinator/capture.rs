@@ -43,7 +43,7 @@ use super::super::schema::model::health::{
 use super::control::{PreparationControl, PreparationInterruption};
 use super::runtime::CoordinatorRuntime;
 
-pub(super) struct CapturedNativeSupportEvidence {
+pub(crate) struct CapturedNativeSupportEvidence {
     pub collector: SupportCollectorEvidenceV1,
     pub collector_records: Vec<CollectorAcceptedRecordV1>,
     pub producer_health: SupportProducerHealthV1,
@@ -207,7 +207,7 @@ where
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum CaptureError {
+pub(crate) enum CaptureError {
     Cancelled,
     Deadline,
     Invalid,

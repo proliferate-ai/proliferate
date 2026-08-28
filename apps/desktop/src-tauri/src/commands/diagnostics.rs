@@ -199,7 +199,7 @@ pub async fn export_debug_bundle(
 ) -> Result<Option<ExportDebugBundleResult>, String> {
     let Some(output_path) = FileDialog::new()
         .add_filter("Zip archive", &["zip"])
-        .set_file_name(&suggested_bundle_file_name())
+        .set_file_name(suggested_bundle_file_name())
         .save_file()
     else {
         return Ok(None);
@@ -290,14 +290,26 @@ mod tests {
         // (renderer-diagnostics-native-error.ts); changing one silently
         // demotes that loss reason to `invoke_failure`.
         let cases = [
-            (SupervisorUnavailable::Starting, "renderer_ingest_collector_starting"),
+            (
+                SupervisorUnavailable::Starting,
+                "renderer_ingest_collector_starting",
+            ),
             (
                 SupervisorUnavailable::Unsupported,
                 "renderer_ingest_collector_unsupported",
             ),
-            (SupervisorUnavailable::Degraded, "renderer_ingest_collector_degraded"),
-            (SupervisorUnavailable::Stopped, "renderer_ingest_collector_stopped"),
-            (SupervisorUnavailable::Replaced, "renderer_ingest_collector_replaced"),
+            (
+                SupervisorUnavailable::Degraded,
+                "renderer_ingest_collector_degraded",
+            ),
+            (
+                SupervisorUnavailable::Stopped,
+                "renderer_ingest_collector_stopped",
+            ),
+            (
+                SupervisorUnavailable::Replaced,
+                "renderer_ingest_collector_replaced",
+            ),
             (
                 SupervisorUnavailable::ShuttingDown,
                 "renderer_ingest_broker_shutting_down",
@@ -306,11 +318,20 @@ mod tests {
                 SupervisorUnavailable::CollectorRejected,
                 "renderer_ingest_collector_rejected",
             ),
-            (SupervisorUnavailable::Deadline, "renderer_ingest_deadline_exceeded"),
-            (SupervisorUnavailable::Protocol, "renderer_ingest_protocol_error"),
+            (
+                SupervisorUnavailable::Deadline,
+                "renderer_ingest_deadline_exceeded",
+            ),
+            (
+                SupervisorUnavailable::Protocol,
+                "renderer_ingest_protocol_error",
+            ),
         ];
         for (error, expected) in cases {
-            assert_eq!(format!("renderer_ingest_{}", error.classification()), expected);
+            assert_eq!(
+                format!("renderer_ingest_{}", error.classification()),
+                expected
+            );
         }
     }
 

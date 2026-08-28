@@ -310,12 +310,22 @@ pub struct QuiesceReport {
 /// `partial_capture_json`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SnapshotNotice {
-    DirtySubmodule { paths: Vec<String> },
-    EmbeddedRepo { paths: Vec<String> },
-    PartialCaptureUntracked { paths: Vec<String> },
-    PartialCaptureTracked { paths: Vec<String> },
+    DirtySubmodule {
+        paths: Vec<String>,
+    },
+    EmbeddedRepo {
+        paths: Vec<String>,
+    },
+    PartialCaptureUntracked {
+        paths: Vec<String>,
+    },
+    PartialCaptureTracked {
+        paths: Vec<String>,
+    },
     /// Raised by `repair_kill_debris`, never by the capture itself.
-    AbortedGitOperation { operation: String },
+    AbortedGitOperation {
+        operation: String,
+    },
 }
 
 /// The typed refusals and failures `snapshot_workspace`, `probe_refusals`,

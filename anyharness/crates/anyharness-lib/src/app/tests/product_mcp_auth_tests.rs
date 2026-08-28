@@ -3,7 +3,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 use serde_json::json;
 
@@ -88,10 +87,7 @@ fn tools_list_body() -> serde_json::Value {
 // on the strength of durable session state alone.
 #[tokio::test(flavor = "current_thread")]
 async fn expired_capability_token_keeps_serving_an_open_session() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let (state, runtime_home, repository_path) =
@@ -116,10 +112,7 @@ async fn expired_capability_token_keeps_serving_an_open_session() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn expired_capability_token_is_forbidden_once_the_session_closes() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let (state, runtime_home, repository_path) =
@@ -135,8 +128,7 @@ async fn expired_capability_token_is_forbidden_once_the_session_closes() {
         tools_list_body(),
     )
     .await
-    .err()
-    .expect("expired token with a closed session must be rejected");
+    .expect_err("expired token with a closed session must be rejected");
 
     // 403 and a cause-naming detail: 401 would send MCP clients into OAuth
     // discovery and mask the real failure behind a parse error.
@@ -151,10 +143,7 @@ async fn expired_capability_token_is_forbidden_once_the_session_closes() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn missing_capability_token_is_forbidden_with_named_cause() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let (state, runtime_home, repository_path) =
@@ -169,8 +158,7 @@ async fn missing_capability_token_is_forbidden_with_named_cause() {
         tools_list_body(),
     )
     .await
-    .err()
-    .expect("missing token must be rejected");
+    .expect_err("missing token must be rejected");
 
     assert_eq!(error.status(), axum::http::StatusCode::FORBIDDEN);
     assert!(error
@@ -183,10 +171,7 @@ async fn missing_capability_token_is_forbidden_with_named_cause() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn garbage_capability_token_is_forbidden_even_for_an_open_session() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
+    let _lock = test_support::lock_env().await;
     let _guard = test_support::set_bearer_token_env(None);
     let _data_key_guard = test_support::set_data_key_env(None);
     let (state, runtime_home, repository_path) =
@@ -201,8 +186,7 @@ async fn garbage_capability_token_is_forbidden_even_for_an_open_session() {
         tools_list_body(),
     )
     .await
-    .err()
-    .expect("garbage token must be rejected even though the session is open");
+    .expect_err("garbage token must be rejected even though the session is open");
 
     assert_eq!(error.status(), axum::http::StatusCode::FORBIDDEN);
     assert!(error

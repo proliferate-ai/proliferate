@@ -155,7 +155,7 @@ pub const COMPOSED_AUTH_CONTEXT_LABEL: &str = "composed";
 /// inject a fake that counts invocations, blocks on a barrier, fails, or hangs —
 /// the same way `pr_status_cache` injects `BranchPrFetcher`.
 #[async_trait::async_trait]
-pub trait ProbeRunner: Send + Sync {
+pub(crate) trait ProbeRunner: Send + Sync {
     async fn run(&self, request: ProbeRequest) -> Result<ProbeSnapshot, ProbeError>;
 }
 

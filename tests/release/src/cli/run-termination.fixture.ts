@@ -2,8 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { bootBillingStackWithLitellmFake } from "../../../intent/stack/billing-usage-import.ts";
-import { startLitellmManagementFake } from "../../../intent/fakes/litellm-management/server.ts";
+import { bootBillingStackWithLitellmFake } from "../scenarios/tier2/stack/billing-usage-import.ts";
+import { startLitellmManagementFake } from "../scenarios/tier2/fakes/litellm-management/server.ts";
 import { writeReportV4 } from "../evidence/write.js";
 import { executeSelectedCells } from "../runner/execute.js";
 import type { RunIdentityV1 } from "../runner/identity.js";

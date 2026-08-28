@@ -23,12 +23,16 @@
 pub(crate) mod gateway_plan;
 mod gateway_probe;
 mod materialize;
+pub mod native_bridge;
 pub mod plan;
 pub mod probe_materialization;
 pub mod profile;
+mod redact;
 pub mod refusal;
 pub mod render;
 pub mod rotation;
+mod sanitize;
+mod seat_trial;
 pub mod state;
 
 #[cfg(test)]
@@ -42,12 +46,19 @@ mod render_tests;
 #[cfg(test)]
 mod seat_rotation_tests;
 #[cfg(test)]
+mod seat_trial_tests;
+#[cfg(test)]
 pub(crate) mod test_support;
 
 use std::path::{Path, PathBuf};
 
 use crate::domains::agents::seat_cooling::SeatCoolingStore;
 
+pub use native_bridge::{
+    clear_native_bridge_flag, clear_native_bridge_flags_for_document, launch_native_grant,
+    pending_native_bridge_harnesses, seed_native_bridge_at_startup, seed_native_bridge_once,
+    NativeBridgeSeedOutcome,
+};
 pub use plan::{GatewayModelPlan, GatewayModelResolve};
 pub use probe_materialization::{
     materialize_for_probe, probe_auth_material, sweep_probe_scratch, ProbeAuthMaterial,
@@ -56,7 +67,13 @@ pub use probe_materialization::{
 pub use profile::{resolve_profile, AgentRuntimeAuthProfile};
 pub use refusal::LaunchRefusal;
 pub use render::{render_profile, RenderedRouteAuth};
+// `seat_rotation_readout_via_db` is gone with its only caller: the HTTP read
+// path that recomposed the pane's rotation tags on every GET. The status
+// document composes the readout once (`status/compose.rs` via
+// `seat_rotation_readout_for_state`) and serves it, so the facade has nothing
+// left to face.
 pub use rotation::{decide_rotation, seat_rotation_readout, RotationDecision, SeatRotationReadout};
+pub use seat_trial::{SeatTrialLedger, SeatTrialVerdict};
 pub use state::{
     apply_state_file, clear_state_file, load_state_file, state_file_path, AgentAuthState,
     AppliedStateOutcome, ClearedStateOutcome,
@@ -137,6 +154,15 @@ pub enum RouteAuthError {
         harness_kind: String,
         earliest_reset_epoch_s: i64,
     },
+    /// The harness has NO entry in the document and the absent-harness policy
+    /// is [`AbsentHarnessPolicy::Refuse`] (the final convention: zero enabled
+    /// selections means unconfigured). Raised only by
+    /// [`resolve_profile_bridged`], and only for a harness the native-migration
+    /// bridge does not hold a legacy flag for. Speaks plain words; shares the
+    /// selection-missing wire code (the spec's refusal variants all render
+    /// under it).
+    #[error("{harness_kind} isn't set up — pick a method in Settings → Agents")]
+    NoConfiguredSource { harness_kind: String },
     #[error("agent-auth source for '{harness_kind}' is incomplete: {detail}")]
     SelectionIncomplete {
         harness_kind: String,
@@ -161,7 +187,9 @@ impl RouteAuthError {
             Self::MalformedStateFile { .. } => "AGENT_ROUTE_STATE_MALFORMED",
             Self::StaleStateSequence { .. } => "AGENT_ROUTE_STATE_STALE",
             Self::ForeignStateLineage { .. } => "AGENT_ROUTE_STATE_LINEAGE",
-            Self::SelectionMissing { .. } => "AGENT_ROUTE_SELECTION_MISSING",
+            Self::SelectionMissing { .. } | Self::NoConfiguredSource { .. } => {
+                "AGENT_ROUTE_SELECTION_MISSING"
+            }
             Self::SeatCooling { .. } => "AGENT_ROUTE_SEAT_COOLING",
             Self::AllSeatsCooling { .. } => "AGENT_ROUTE_ALL_SEATS_COOLING",
             Self::SelectionIncomplete { .. } => "AGENT_ROUTE_SELECTION_INCOMPLETE",
@@ -185,6 +213,81 @@ pub(crate) fn current_server_origin() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+/// What a launch does for a harness that has NO entry in the applied document.
+///
+/// This is the zero-rows convention, as one value. Today's convention is
+/// [`Self::Native`] ("absent means native": the harness launches on its own
+/// login). The final convention (agent_auth spec, flow 3) is [`Self::Refuse`]
+/// ("zero enabled rows means unconfigured": a plain-words refusal). The
+/// native-migration bridge ([`native_bridge`]) sits in front of either: a
+/// harness holding a legacy flag launches native under both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AbsentHarnessPolicy {
+    Native,
+    Refuse,
+}
+
+/// The convention THIS build applies — the one place the cutover flips.
+///
+/// The refusal cutover (the typed refusal set, slice 2 of the auth rebuild)
+/// changes this constant to [`AbsentHarnessPolicy::Refuse`] and nothing else:
+/// every absent-harness decision — the launch render, the launch-options
+/// probe's scratch materialization, the create-time selection gate — resolves
+/// through [`resolve_profile_for_launch`], and the bridge's launch grant
+/// FAILS OPEN on a machine whose one-time seed pass has not recorded an
+/// answer yet ([`native_bridge::launch_native_grant`]), so no startup
+/// ordering can refuse a pre-cutover native user.
+pub const ABSENT_HARNESS_POLICY: AbsentHarnessPolicy = AbsentHarnessPolicy::Native;
+
+/// [`resolve_profile`] with the native-migration bridge in front of the
+/// absent-harness convention. The ONE seam the cutover consults:
+///
+/// - harness present in the document → [`resolve_profile`] decides (a
+///   present-but-empty entry still fails closed; the bridge never overrides an
+///   explicit selection);
+/// - harness absent + `legacy_native_granted` → [`AgentRuntimeAuthProfile::Native`];
+/// - harness absent + no grant → `policy` decides.
+pub fn resolve_profile_bridged(
+    state: Option<&AgentAuthState>,
+    harness_kind: &str,
+    policy: AbsentHarnessPolicy,
+    legacy_native_granted: bool,
+) -> Result<AgentRuntimeAuthProfile, RouteAuthError> {
+    let absent = state.is_none_or(|state| state.sources_for(harness_kind).is_none());
+    if !absent {
+        return resolve_profile(state, harness_kind);
+    }
+    if legacy_native_granted {
+        tracing::debug!(
+            harness_kind,
+            "harness absent from agent-auth state; legacy native bridge keeps native behavior"
+        );
+        return Ok(AgentRuntimeAuthProfile::Native);
+    }
+    match policy {
+        AbsentHarnessPolicy::Native => Ok(AgentRuntimeAuthProfile::Native),
+        AbsentHarnessPolicy::Refuse => Err(RouteAuthError::NoConfiguredSource {
+            harness_kind: harness_kind.to_string(),
+        }),
+    }
+}
+
+/// The launch-path resolution: [`resolve_profile_bridged`] under this build's
+/// [`ABSENT_HARNESS_POLICY`] with the bridge's launch grant read from the
+/// runtime home. Also the probe's resolution (probe env == launch env).
+pub(crate) fn resolve_profile_for_launch(
+    runtime_home: &Path,
+    state: Option<&AgentAuthState>,
+    harness_kind: &str,
+) -> Result<AgentRuntimeAuthProfile, RouteAuthError> {
+    resolve_profile_bridged(
+        state,
+        harness_kind,
+        ABSENT_HARNESS_POLICY,
+        native_bridge::launch_native_grant(runtime_home, harness_kind),
+    )
+}
+
 /// Resolve the auth profile that a launch will actually use, including the
 /// desktop server-origin guard. Auth/readiness and the launch-options probe call
 /// this same seam so neither can reason about a route the launcher will ignore.
@@ -193,7 +296,7 @@ pub(crate) fn resolve_launch_auth_profile(
     harness_kind: &str,
 ) -> Result<AgentRuntimeAuthProfile, RouteAuthError> {
     let state = load_effective_state(runtime_home, current_server_origin().as_deref())?;
-    resolve_profile(state.as_ref(), harness_kind)
+    resolve_profile_for_launch(runtime_home, state.as_ref(), harness_kind)
 }
 
 pub(crate) fn load_effective_state(
@@ -251,7 +354,7 @@ fn resolve_launch_route_auth_for_server(
 ) -> Result<RenderedRouteAuth, RouteAuthError> {
     let state = load_effective_state(runtime_home, current_server_origin)?;
     let sequence = state.as_ref().map(|state| state.sequence).unwrap_or(0);
-    let profile = resolve_profile(state.as_ref(), harness_kind)?;
+    let profile = resolve_profile_for_launch(runtime_home, state.as_ref(), harness_kind)?;
     let plan = resolver.resolve_gateway_models(harness_kind, sequence);
     let rendered = render_profile(&profile, harness_kind, &plan, runtime_home)?;
     for spec in &rendered.files {
@@ -282,11 +385,16 @@ pub fn launch_route_provides_credentials(runtime_home: &Path, harness_kind: &str
 /// Core of [`launch_route_provides_credentials`], parameterized on the current
 /// server origin so the server-switch guard is unit-testable without mutating
 /// process-global env state. Deliberately mirrors
-/// [`resolve_launch_route_auth_for_server`]'s state load + origin filter +
-/// [`resolve_profile`] so readiness and launch never disagree on whether a
-/// route is in effect. A malformed/unresolvable state is treated as "no route"
-/// (native readiness governs) rather than an error — readiness must never fail
-/// closed on a state file the launcher itself tolerates.
+/// [`resolve_launch_route_auth_for_server`]'s state load + origin filter so
+/// readiness and launch never disagree on whether a route is in effect. This
+/// one stays on the RAW [`resolve_profile`] on purpose: it only asks "does the
+/// enrolled state provide a non-native route?", and the native-migration
+/// bridge can never produce one — a bridged absent harness is `Native` (route
+/// provides nothing) and a refused absent harness is an error (route provides
+/// nothing), so the raw and bridged answers are provably identical here. A
+/// malformed/unresolvable state is treated as "no route" (native readiness
+/// governs) rather than an error — readiness must never fail closed on a
+/// state file the launcher itself tolerates.
 fn launch_route_provides_credentials_for_server(
     runtime_home: &Path,
     harness_kind: &str,
@@ -344,10 +452,9 @@ fn launch_route_selection_failure_for_server(
     // and native readiness governs (identical policy to
     // `launch_route_provides_credentials_for_server`).
     let state = load_effective_state(runtime_home, current_server_origin).ok()?;
-    match resolve_profile(state.as_ref(), harness_kind) {
-        Ok(_) => None,
-        Err(error) => Some(error),
-    }
+    // Same bridged resolution as the launch itself: create-time must not
+    // refuse a harness the launcher would run (the bridge's grant included).
+    resolve_profile_for_launch(runtime_home, state.as_ref(), harness_kind).err()
 }
 
 /// Rotation-aware [`resolve_launch_route_auth`] — the SESSION-LAUNCH entry

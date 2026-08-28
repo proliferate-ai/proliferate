@@ -6,11 +6,11 @@
 //! where every session launch reads it fresh.
 
 use anyharness_contract::v1::{
-    AgentAuthMethodRow, AgentAuthStatusDoc, ApplyAgentAuthStateResponse,
+    AgentAuthMethodRow, AgentAuthStatusDoc, ApplyAgentAuthStateResponse, NativeBridgeResponse,
 };
 use axum::{
     body::Bytes,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -19,8 +19,10 @@ use super::agent_auth_contract::{method_row_to_contract, status_doc_to_contract}
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::domains::agents::launch_probe::{LaunchProbeService, PokeReason};
+use crate::domains::agents::model::AgentKind;
 use crate::domains::agents::route_auth::{
-    apply_state_file, clear_state_file, AgentAuthState, RouteAuthError,
+    apply_state_file, clear_native_bridge_flag, clear_native_bridge_flags_for_document,
+    clear_state_file, native_bridge, AgentAuthState, RouteAuthError,
 };
 use crate::domains::agents::status::RefreshCause;
 
@@ -84,6 +86,15 @@ pub async fn put_agent_auth_state(
     let status_service = state.agent_status_service.clone();
     super::blocking::run_blocking("agent-auth state apply", move || {
         let outcome = apply_state_file(&runtime_home, &applied)?;
+        // Native-migration bridge: a harness the applied document names has been
+        // configured (mint, key, or gateway) — that IS the act the one-time prompt
+        // asked for, so its legacy flag is dropped here. Best-effort: the document
+        // is already persisted and decides that harness's launches regardless.
+        // It rides INSIDE this closure with the apply for the same reason the
+        // pokes do — it is fs work that must commit with the write it follows.
+        if let Err(error) = clear_native_bridge_flags_for_document(&runtime_home, &applied) {
+            tracing::warn!(%error, "native-bridge flags could not be cleared for the applied document");
+        }
         // Auth-applied poke, per-harness targeted (spec §4, "Probe targeting":
         // `AuthApplied{changed}`): an apply re-probes ONLY the harnesses whose
         // entry actually changed — appeared, disappeared, or differs — so a
@@ -250,6 +261,57 @@ fn require_known_harness(state: &AppState, harness: &str) -> Result<(), ApiError
             "AGENT_AUTH_UNKNOWN_HARNESS",
         ))
     }
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/agent-auth/native-bridge",
+    responses(
+        (status = 200, description = "Harnesses still carrying the native-migration legacy flag", body = NativeBridgeResponse),
+        (status = 500, description = "Bridge file unreadable", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "agent-auth"
+)]
+pub async fn get_native_bridge(
+    State(state): State<AppState>,
+) -> Result<Json<NativeBridgeResponse>, ApiError> {
+    // One read serves both fields — two reads could interleave with a
+    // concurrent dismiss and answer an incoherent (seeded, harnesses) pair.
+    let bridge =
+        native_bridge::load_native_bridge(&state.runtime_home).map_err(map_route_auth_error)?;
+    let seeded = bridge.is_some();
+    let harnesses = bridge
+        .map(|bridge| bridge.harnesses.into_iter().collect())
+        .unwrap_or_default();
+    Ok(Json(NativeBridgeResponse { seeded, harnesses }))
+}
+
+/// The dismiss-to-configure act of the one-time prompt: drop one harness's
+/// legacy flag so its next launch follows the real convention. Idempotent —
+/// a harness without a flag answers 204 too.
+#[utoipa::path(
+    delete,
+    path = "/v1/agent-auth/native-bridge/{kind}",
+    params(("kind" = String, Path, description = "Harness kind")),
+    responses(
+        (status = 204, description = "Legacy flag cleared (or was not held)"),
+        (status = 400, description = "Unknown harness kind", body = anyharness_contract::v1::ProblemDetails),
+        (status = 500, description = "Bridge file could not be written", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "agent-auth"
+)]
+pub async fn dismiss_native_bridge(
+    State(state): State<AppState>,
+    Path(kind): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let Some(kind) = AgentKind::parse(&kind) else {
+        return Err(ApiError::bad_request(
+            format!("unknown harness kind '{kind}'"),
+            "AGENT_ROUTE_UNKNOWN_HARNESS",
+        ));
+    };
+    clear_native_bridge_flag(&state.runtime_home, kind.as_str()).map_err(map_route_auth_error)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// State-route mapping: ONE mapper with the sessions API

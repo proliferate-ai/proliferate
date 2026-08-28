@@ -9,7 +9,10 @@
 //!
 //! - Capture rule: the last non-empty line of terminal output matching
 //!   `^sk-ant-[A-Za-z0-9_-]{40,}$` (the `oat01` infix is server-issued,
-//!   observed not contractual — the loose prefix survives a version bump).
+//!   observed not contractual — the loose prefix survives a version bump),
+//!   REASSEMBLED across a hard wrap (see [`MintCapture::take_line`]) — the CLI
+//!   wraps its own output at the PTY width, so "the line the CLI printed" and
+//!   "the segment between two newlines" are not the same string.
 //! - Completion: terminal exit, or a 60-second grace after the pattern
 //!   appears, whichever comes first.
 //! - The captured token lives in MEMORY ONLY — never machine disk, never
@@ -208,8 +211,18 @@ pub enum MintCaptureStatus {
 pub struct MintCapture {
     /// Raw bytes of the in-progress (not yet newline-terminated) output line.
     pending: Vec<u8>,
-    /// The last non-empty sanitized line matching the token rule.
+    /// The token line being accumulated: the last `sk-ant-`-prefixed sanitized
+    /// segment plus every hard-wrap continuation appended to it.
     candidate: Option<String>,
+    /// Whether `candidate` satisfies the token rule. A wrapped token's FIRST
+    /// fragment can be too short to satisfy it on its own (a pane narrower than
+    /// 47 columns), so accumulation and admission are separate facts.
+    candidate_matched: bool,
+    /// True while `candidate` is still the TAIL of the most recent non-empty
+    /// sanitized segment, so the next such segment may be the rest of a
+    /// hard-wrapped token. Cleared by any non-empty segment that is not a
+    /// continuation, and by every teardown.
+    candidate_open: bool,
     matched_at: Option<Instant>,
     exited: bool,
     consumed: bool,
@@ -270,7 +283,7 @@ impl MintCapture {
         self.take_line(&line, now);
         wipe_bytes(line);
         self.exited = true;
-        if self.candidate.is_none() {
+        if !self.candidate_matched {
             self.fail();
         }
     }
@@ -284,8 +297,8 @@ impl MintCapture {
         if self.failed {
             return MintCaptureStatus::Failed;
         }
-        match (&self.candidate, self.matched_at) {
-            (Some(_), Some(matched_at)) => {
+        match (self.candidate_matched, self.matched_at) {
+            (true, Some(matched_at)) => {
                 if self.exited || now.duration_since(matched_at) >= MINT_CAPTURE_GRACE {
                     MintCaptureStatus::Ready
                 } else {
@@ -322,6 +335,8 @@ impl MintCapture {
     }
 
     fn wipe(&mut self) {
+        self.candidate_open = false;
+        self.candidate_matched = false;
         if let Some(candidate) = self.candidate.take() {
             wipe_bytes(candidate.into_bytes());
         }
@@ -329,17 +344,110 @@ impl MintCapture {
         wipe_bytes(pending);
     }
 
+    /// One sanitized segment, classified three ways.
+    ///
+    /// **Why a wrap must be reassembled.** `claude setup-token` renders through
+    /// Ink, which HARD-WRAPS its own output at the PTY width: a token wider than
+    /// the pane is emitted as `<width chars>\r\r\n<remainder>`, each fragment its
+    /// own newline-delimited segment with no prefix. The PTY width is the login
+    /// pane's width (the client resizes it, so the spawn's `cols` is not the
+    /// operative number), so at a 99-column pane a 108-character token arrives as
+    /// a 99-character head that satisfies the anchored rule on its own plus a
+    /// 9-character tail that does not — and "the last matching line" then captures
+    /// a truncated token that authenticates nowhere. Widening the PTY only moves
+    /// the boundary; the rule has to rejoin the fragments.
+    ///
+    /// A continuation is recognized width-free: the previous non-empty segment
+    /// ENDED in the candidate, this segment is entirely token characters, it does
+    /// not itself start `sk-ant-` (that marks a new token, not a continuation),
+    /// and it is no longer than what it continues (a wrap remainder cannot exceed
+    /// the full-width head it wrapped out of). EMPTY segments are transparent:
+    /// the `\r\r\n` a wrap emits segments into two of them, as does any blank
+    /// display line, so an empty segment carries no information and must neither
+    /// close a candidate nor become one.
     fn take_line(&mut self, raw: &[u8], now: Instant) {
         let sanitized = sanitize_terminal_line(raw);
-        if is_seat_token_line(&sanitized) {
-            // Replace (and wipe) any earlier candidate: the LAST match wins.
-            if let Some(previous) = self.candidate.take() {
-                wipe_bytes(previous.into_bytes());
-            }
-            self.candidate = Some(sanitized);
-            self.matched_at = Some(now);
-        } else {
+        if sanitized.is_empty() {
             wipe_bytes(sanitized.into_bytes());
+            return;
+        }
+        if is_token_charset(&sanitized) && sanitized.starts_with(TOKEN_PREFIX) {
+            self.start_candidate(sanitized, now);
+            return;
+        }
+        if self.candidate_open && self.continues_candidate(&sanitized) {
+            self.extend_candidate(sanitized, now);
+            return;
+        }
+        self.close_candidate();
+        wipe_bytes(sanitized.into_bytes());
+    }
+
+    /// A new token line begins. It becomes the candidate (the LAST match wins),
+    /// EXCEPT that a line too short to satisfy the rule may not displace an
+    /// already-matched candidate: a stray short `sk-ant-…` echo must not be able
+    /// to destroy a token this capture already holds.
+    fn start_candidate(&mut self, line: String, now: Instant) {
+        let full = is_seat_token_line(&line);
+        if !full && self.candidate_matched {
+            self.close_candidate();
+            wipe_bytes(line.into_bytes());
+            return;
+        }
+        if let Some(previous) = self.candidate.take() {
+            wipe_bytes(previous.into_bytes());
+        }
+        self.candidate_matched = full;
+        self.candidate = Some(line);
+        self.candidate_open = true;
+        if full {
+            self.matched_at = Some(now);
+        }
+    }
+
+    /// Is `segment` the remainder of the hard-wrapped candidate line?
+    fn continues_candidate(&self, segment: &str) -> bool {
+        let Some(candidate) = self.candidate.as_ref() else {
+            return false;
+        };
+        segment.len() <= candidate.len()
+            && !segment.starts_with(TOKEN_PREFIX)
+            && is_token_charset(segment)
+    }
+
+    /// Append a wrap remainder, keeping the candidate open so a token wrapped
+    /// over three or more rows rejoins in full. The two source buffers are
+    /// wiped, not dropped: the joined `String` is a fresh allocation.
+    fn extend_candidate(&mut self, tail: String, now: Instant) {
+        let Some(head) = self.candidate.take() else {
+            return;
+        };
+        let mut joined = String::with_capacity(head.len() + tail.len());
+        joined.push_str(&head);
+        joined.push_str(&tail);
+        tracing::debug!(
+            head_len = head.len(),
+            tail_len = tail.len(),
+            "mint capture rejoined a hard-wrapped token line"
+        );
+        wipe_bytes(head.into_bytes());
+        wipe_bytes(tail.into_bytes());
+        self.candidate_matched = is_seat_token_line(&joined);
+        self.candidate = Some(joined);
+        if self.candidate_matched {
+            self.matched_at = Some(now);
+        }
+    }
+
+    /// A non-continuation line ended the token line's run. A matched candidate
+    /// is kept (it is the capture's answer until a later match replaces it); an
+    /// unmatched accumulation was never a token and is wiped on the spot.
+    fn close_candidate(&mut self) {
+        self.candidate_open = false;
+        if !self.candidate_matched {
+            if let Some(partial) = self.candidate.take() {
+                wipe_bytes(partial.into_bytes());
+            }
         }
     }
 }
@@ -378,13 +486,21 @@ fn wipe_bytes(mut bytes: Vec<u8>) {
 /// regex dependency) and total: a prefix match plus a 40+-char tail of the
 /// exact character class.
 pub fn is_seat_token_line(line: &str) -> bool {
-    let Some(rest) = line.strip_prefix("sk-ant-") else {
+    let Some(rest) = line.strip_prefix(TOKEN_PREFIX) else {
         return false;
     };
-    rest.len() >= 40
-        && rest
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+    rest.len() >= 40 && is_token_charset(rest)
+}
+
+/// The token rule's prefix. `oat01` is server-issued and observed, not
+/// contractual, so the prefix stays loose.
+const TOKEN_PREFIX: &str = "sk-ant-";
+
+/// The token rule's character class, `[A-Za-z0-9_-]`. Non-empty is the caller's
+/// business: an empty segment is never a token or a continuation.
+fn is_token_charset(text: &str) -> bool {
+    text.chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
 }
 
 /// Strip ANSI escape sequences (CSI, OSC, and two-byte ESC sequences) and
@@ -448,119 +564,4 @@ fn sanitize_terminal_line(raw: &[u8]) -> String {
         out.drain(..leading);
     }
     out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const TOKEN: &str = "sk-ant-oat01-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_x";
-
-    fn now() -> Instant {
-        Instant::now()
-    }
-
-    #[test]
-    fn the_capture_rule_matches_the_spec_pattern() {
-        assert!(is_seat_token_line(TOKEN));
-        // 40 chars after the prefix is the boundary.
-        let boundary = format!("sk-ant-{}", "a".repeat(40));
-        assert!(is_seat_token_line(&boundary));
-        let short = format!("sk-ant-{}", "a".repeat(39));
-        assert!(!is_seat_token_line(&short));
-        assert!(!is_seat_token_line("sk-ant "));
-        assert!(!is_seat_token_line("prefix sk-ant-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
-        assert!(!is_seat_token_line(&format!("sk-ant-{}!", "a".repeat(40))));
-    }
-
-    #[test]
-    fn captures_the_last_matching_line_through_ansi_noise() {
-        let mut capture = MintCapture::new();
-        let earlier = format!("sk-ant-{}", "b".repeat(40));
-        capture.feed(b"Signing you in...\r\n", now());
-        capture.feed(format!("{earlier}\r\n").as_bytes(), now());
-        // The real token arrives wrapped in color codes and a CR.
-        capture.feed(format!("\x1b[1;32m{TOKEN}\x1b[0m\r\n", TOKEN = TOKEN).as_bytes(), now());
-        capture.feed(b"Store this token somewhere safe.\r\n", now());
-        capture.on_exit(now());
-        let token = capture.claim(now()).expect("claimable after exit");
-        assert_eq!(token, TOKEN);
-    }
-
-    #[test]
-    fn a_bare_carriage_return_resets_the_visible_line() {
-        // A \r-overwrite spinner: the CLI prints "Waiting…", returns the
-        // cursor to column 0 with a bare \r (no \n), and prints the token
-        // over it. The token IS the visible line and must capture — merging
-        // the segments ("Waitingsk-ant-…") would miss it.
-        let mut capture = MintCapture::new();
-        capture.feed(format!("Waiting\r{TOKEN}\r\n").as_bytes(), now());
-        capture.on_exit(now());
-        assert_eq!(capture.claim(now()).as_deref(), Some(TOKEN));
-    }
-
-    #[test]
-    fn a_token_without_a_trailing_newline_still_captures_on_exit() {
-        let mut capture = MintCapture::new();
-        capture.feed(TOKEN.as_bytes(), now());
-        assert_eq!(capture.status(now()), MintCaptureStatus::Waiting);
-        capture.on_exit(now());
-        assert_eq!(capture.claim(now()).as_deref(), Some(TOKEN));
-    }
-
-    #[test]
-    fn completion_is_exit_or_the_grace_window_whichever_first() {
-        let mut capture = MintCapture::new();
-        let start = now();
-        capture.feed(format!("{TOKEN}\n").as_bytes(), start);
-        // Matched but neither exited nor aged: the grace window is running.
-        assert_eq!(capture.status(start), MintCaptureStatus::Captured);
-        assert!(capture.claim(start).is_none(), "not claimable mid-grace");
-        let aged = start.checked_add(MINT_CAPTURE_GRACE).expect("instant add");
-        assert_eq!(capture.status(aged), MintCaptureStatus::Ready);
-        assert_eq!(capture.claim(aged).as_deref(), Some(TOKEN));
-    }
-
-    #[test]
-    fn claim_is_single_shot_and_wipes() {
-        let mut capture = MintCapture::new();
-        capture.feed(format!("{TOKEN}\n").as_bytes(), now());
-        capture.on_exit(now());
-        assert!(capture.claim(now()).is_some());
-        assert!(capture.is_wiped());
-        assert_eq!(capture.status(now()), MintCaptureStatus::Consumed);
-        assert!(capture.claim(now()).is_none(), "a second claim finds nothing");
-    }
-
-    #[test]
-    fn exit_without_a_match_fails_and_wipes() {
-        let mut capture = MintCapture::new();
-        capture.feed(b"error: could not open browser\n", now());
-        capture.feed(b"sk-ant-too-short\n", now());
-        capture.on_exit(now());
-        assert_eq!(capture.status(now()), MintCaptureStatus::Failed);
-        assert!(capture.is_wiped());
-        assert!(capture.claim(now()).is_none());
-    }
-
-    #[test]
-    fn explicit_failure_wipes_a_captured_but_unclaimed_token() {
-        // The abort path: a token was seen, then the terminal is closed before
-        // the handoff. Nothing may remain in memory.
-        let mut capture = MintCapture::new();
-        capture.feed(format!("{TOKEN}\n").as_bytes(), now());
-        assert_eq!(capture.status(now()), MintCaptureStatus::Captured);
-        capture.fail();
-        assert_eq!(capture.status(now()), MintCaptureStatus::Failed);
-        assert!(capture.is_wiped());
-        assert!(capture.claim(now()).is_none());
-    }
-
-    #[test]
-    fn debug_never_prints_the_token() {
-        let mut capture = MintCapture::new();
-        capture.feed(format!("{TOKEN}\n").as_bytes(), now());
-        let debug = format!("{capture:?}");
-        assert!(!debug.contains("sk-ant-"), "Debug leaked the token: {debug}");
-    }
 }

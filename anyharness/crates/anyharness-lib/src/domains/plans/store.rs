@@ -85,10 +85,7 @@ impl PlanStore {
 
     /// Whether a plan has a native interaction link, read inside a
     /// caller-owned transaction alongside `find_by_id_in_tx`.
-    pub fn has_interaction_link_in_tx(
-        tx: &Connection,
-        plan_id: &str,
-    ) -> rusqlite::Result<bool> {
+    pub fn has_interaction_link_in_tx(tx: &Connection, plan_id: &str) -> rusqlite::Result<bool> {
         tx.query_row(
             "SELECT EXISTS(SELECT 1 FROM plan_interaction_links WHERE plan_id = ?1)",
             [plan_id],

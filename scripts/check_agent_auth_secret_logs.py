@@ -4,7 +4,8 @@
 
 The agent-auth surfaces move real provider secrets and minted gateway keys
 through their hot paths: the cloud enrollment/migration/topup flows in
-``server/proliferate/server/agent_auth``, the AnyHarness render plane under
+``server/proliferate/server/agent_auth`` and
+``server/proliferate/server/ai_gateway``, the AnyHarness render plane under
 ``route_auth``, and the seat plane — ``seat_cooling`` (the per-seat limit
 ledger) plus the live session tree under ``live/sessions``, whose turn path
 observes seat limits with the resolved seat profile in hand. A single
@@ -81,9 +82,7 @@ from scripts import lint_records  # noqa: E402  (path shim must precede the impo
 CHECKER = "scripts/check_agent_auth_secret_logs.py"
 RULE_ID = "PROD-AGENTAUTH-001"
 RULES = lint_records.load("product")
-OWNED_RULE_IDS = frozenset(
-    rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER
-)
+OWNED_RULE_IDS = frozenset(rule.id for rule in RULES.rules.values() if rule.enforced_by == CHECKER)
 
 # (root, suffixes) — Python cloud gateway surface, the ciphertext/plaintext
 # custody planes (store + models + encryption, where ``value_ciphertext`` and
@@ -95,6 +94,7 @@ OWNED_RULE_IDS = frozenset(
 # rendering, diagnostics). Every root must exist — see the self-test.
 SCANNED_ROOTS: list[tuple[str, frozenset[str]]] = [
     ("server/proliferate/server/agent_auth", frozenset({".py"})),
+    ("server/proliferate/server/ai_gateway", frozenset({".py"})),
     ("server/proliferate/db/store/agent_gateway", frozenset({".py"})),
     ("server/proliferate/db/models/agent_gateway.py", frozenset({".py"})),
     ("server/proliferate/lib/infra/encryption", frozenset({".py"})),

@@ -72,7 +72,7 @@ from proliferate.integrations.github import (
     GitHubIntegrationError,
     get_github_user_profile,
 )
-from proliferate.server.agent_auth.signup_hook import (
+from proliferate.server.ai_gateway.signup_hook import (
     schedule_agent_gateway_user_enrollment,
 )
 from proliferate.server.notifications import (

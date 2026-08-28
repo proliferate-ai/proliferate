@@ -148,7 +148,7 @@ fn hash_spawn_spec(hasher: &mut Sha256, spawn: &SpawnSpec) {
     }
 
     let mut env = spawn.env.iter().collect::<Vec<_>>();
-    env.sort_by(|(left, _), (right, _)| left.cmp(right));
+    env.sort_by_key(|(left, _)| *left);
     for (key, value) in env {
         hash_field(hasher, b"spawn-env");
         hash_field(hasher, key.as_bytes());

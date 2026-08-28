@@ -33,7 +33,7 @@ use crate::persistence::Db;
 /// The Python ACP agent driving these tests. `__CAP_SHAPE__` is replaced with
 /// `strict` (advertises the edit-safe `targetedFork` extension → targeted_fork
 /// probes true) or `legacy` (the shipped Claude .2 shape: bare `fork` capability
-/// + init-level `_meta.anyharness.fork` → targeted_fork false). A `hold-fork`
+/// plus init-level `_meta.anyharness.fork` → targeted_fork false). A `hold-fork`
 /// control file stalls the agent inside `session/fork` for the double-fork race.
 const FORK_AGENT_PY: &str = r#"#!/usr/bin/env python3
 import json, os, select, sys, time, uuid

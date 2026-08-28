@@ -179,7 +179,6 @@ impl SessionStore {
                 params![session_id, relation.as_str()],
                 |row| row.get(0),
             )
-            .map_err(Into::into)
         })
     }
 
@@ -210,7 +209,6 @@ impl SessionStore {
                 params![session_id, SessionLinkRelation::Subagent.as_str()],
                 |row| row.get(0),
             )
-            .map_err(Into::into)
         })
     }
 
@@ -233,7 +231,6 @@ impl SessionStore {
                 map_session,
             )
             .optional()
-            .map_err(Into::into)
         })
     }
 }

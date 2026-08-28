@@ -52,7 +52,7 @@ fn resolve_built_collector_binary() -> Result<PathBuf, String> {
         })
         .collect::<Vec<_>>();
 
-    candidates.sort_by(|left, right| compare_candidates(left, right));
+    candidates.sort_by(compare_candidates);
     if let Some((_, path)) = candidates.pop() {
         return Ok(path);
     }

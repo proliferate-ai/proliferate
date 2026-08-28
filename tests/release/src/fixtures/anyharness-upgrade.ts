@@ -1,6 +1,6 @@
 /**
  * Helpers for the tier-4 AnyHarness binary self-update scenario (T4-CLOUD-1,
- * owned by specs/engineering/testing/tier-4-scenario-contract.md; shipped
+ * owned by delivery/testing-cicd/archive/tier-4-scenario-contract.md; shipped
  * mechanics live in specs/areas/anyharness.md).
  * Two kinds of thing live here:
  *

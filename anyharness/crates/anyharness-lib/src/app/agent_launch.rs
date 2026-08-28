@@ -2,7 +2,7 @@
 //! poke suppression, and the agent runtime with its engine attached.
 //! Composition only — no behavior.
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 
 use crate::domains::agents::catalog::service::AgentCatalogService;
@@ -33,32 +33,32 @@ pub(super) struct AgentStack {
 
 pub(super) fn build_agent_stack(
     db: &Db,
-    runtime_home: &PathBuf,
+    runtime_home: &Path,
     agent_reconcile_service: &Arc<AgentReconcileService>,
     agent_seed_store: &AgentSeedStore,
     catalog_sync_service: &Arc<CatalogSyncService>,
 ) -> AgentStack {
     // OpenCode route materialization uses a memoized live `GET /v1/models`.
     // It has no catalog input and never writes executable launch options.
-    let gateway_model_planner = Arc::new(GatewayModelPlanner::new(runtime_home.clone()));
+    let gateway_model_planner = Arc::new(GatewayModelPlanner::new(runtime_home.to_path_buf()));
     let launch_options_service = Arc::new(HarnessLaunchOptionsService::new(
         db.clone(),
-        runtime_home.clone(),
+        runtime_home.to_path_buf(),
     ));
-    let probe_targets = Arc::new(RuntimeProbeTargets::new(runtime_home.clone()));
+    let probe_targets = Arc::new(RuntimeProbeTargets::new(runtime_home.to_path_buf()));
     // The per-harness status documents (agent_auth spec §2): the probe engine
     // pushes its evidence in (admission → stale, completion → verdict), and
     // the API doors serve the persisted documents verbatim.
     let agent_status_service = Arc::new(AgentStatusService::new(
         db.clone(),
-        runtime_home.clone(),
+        runtime_home.to_path_buf(),
         probe_targets.clone(),
     ));
     // Construct one probe engine per process so every poke shares one
     // single-flight gate. Its lock makes a second runtime read-only.
     let launch_probe_service = Arc::new(
         LaunchProbeService::new(
-            runtime_home.clone(),
+            runtime_home.to_path_buf(),
             gateway_model_planner.clone(),
             probe_targets,
         )
@@ -73,7 +73,7 @@ pub(super) fn build_agent_stack(
     #[cfg(test)]
     let automatic_poke_engine: Option<Arc<LaunchProbeService>> = None;
     let agent_runtime_without_probes = AgentRuntime::new(
-        runtime_home.clone(),
+        runtime_home.to_path_buf(),
         agent_reconcile_service.clone(),
         agent_seed_store.clone(),
         AgentCatalogService::new(catalog_sync_service.clone()),

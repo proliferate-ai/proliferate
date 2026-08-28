@@ -41,12 +41,7 @@ pub fn ensure_proliferate_excluded(workspace_root: &Path) -> anyhow::Result<Excl
     let existing = match std::fs::read_to_string(&exclude_path) {
         Ok(content) => content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(error) => {
-            return Err(anyhow::anyhow!(
-                "read {}: {error}",
-                exclude_path.display()
-            ))
-        }
+        Err(error) => return Err(anyhow::anyhow!("read {}: {error}", exclude_path.display())),
     };
     if existing
         .lines()
