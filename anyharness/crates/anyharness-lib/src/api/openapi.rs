@@ -53,15 +53,14 @@ use anyharness_contract::v1::{
     MobilitySessionLinkCompletionDeliveryRecord, MobilitySessionLinkCompletionRecord,
     MobilitySessionLinkRecord, MobilitySessionLinkWakeScheduleRecord,
     MobilitySessionLiveConfigSnapshotRecord, MobilitySessionRawNotificationRecord,
-    MobilitySessionRecord, NativeBridgeResponse, NativeIntegration, NativeIntegrationKind,
-    NativeIntegrationRisk, NativeIntegrationSelectionRequest, NativeIntegrationsResponse,
-    NormalizedSessionControl, NormalizedSessionControlValue, NormalizedSessionControls,
-    OriginContext, OriginEntrypoint, OriginKind, PendingInteractionPayloadSummary,
-    PendingInteractionSource, PendingInteractionSummary, PendingPromptAddedPayload,
-    PendingPromptRemovalReason, PendingPromptRemovedPayload, PendingPromptSummary,
-    PendingPromptUpdatedPayload, PendingPromptsReorderedPayload, PermissionInteractionContext,
-    PermissionInteractionOption, PermissionInteractionOptionKind, PermissionInteractionPayload,
-    PlanDecisionRequest, PlanDecisionResponse, PlanEntry, PlanHandoffPromptStatus,
+    MobilitySessionRecord, NativeBridgeResponse, NormalizedSessionControl,
+    NormalizedSessionControlValue, NormalizedSessionControls, OriginContext, OriginEntrypoint,
+    OriginKind, PendingInteractionPayloadSummary, PendingInteractionSource,
+    PendingInteractionSummary, PendingPromptAddedPayload, PendingPromptRemovalReason,
+    PendingPromptRemovedPayload, PendingPromptSummary, PendingPromptUpdatedPayload,
+    PendingPromptsReorderedPayload, PermissionInteractionContext, PermissionInteractionOption,
+    PermissionInteractionOptionKind, PermissionInteractionPayload, PlanDecisionRequest,
+    PlanDecisionResponse, PlanEntry, PlanHandoffPromptStatus,
     PrepareRepoRootMobilityDestinationRequest, PrepareRepoRootMobilityDestinationResponse,
     ProblemDetails, PromptInputBlock, PromptProvenance, PromptSessionRequest,
     PromptSessionResponse, PromptSessionStatus, ProposedPlanDecisionState, ProposedPlanDetail,
@@ -134,8 +133,6 @@ mod support_windows;
         super::http::agents::list_agents,
         super::http::agent_launch_options::get_launch_options,
         super::http::agent_launch_options::refresh_launch_options,
-        super::http::agent_native_integrations::list_native_integrations,
-        super::http::agent_native_integrations::set_native_integration_selection,
         super::http::agents::get_agent,
         super::http::agents::install_agent,
         super::http::agents::start_agent_login,
@@ -298,11 +295,6 @@ mod support_windows;
         HarnessLaunchOptions,
         HarnessLaunchOptionsState,
         HarnessLaunchOptionsResponse,
-        NativeIntegrationKind,
-        NativeIntegrationRisk,
-        NativeIntegration,
-        NativeIntegrationsResponse,
-        NativeIntegrationSelectionRequest,
         AgentReadinessState,
         ArtifactStatus,
         AgentSummary,
@@ -687,6 +679,7 @@ pub fn openapi_json() -> String {
     support_windows::merge(
         ApiDoc::openapi()
             .merge_from(super::subagents_openapi::SubagentApiDoc::openapi())
+            .merge_from(super::native_integrations_openapi::NativeIntegrationsApiDoc::openapi())
             .merge_from(super::workflow_runs_openapi::WorkflowRunsApiDoc::openapi()),
     )
     .to_pretty_json()

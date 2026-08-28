@@ -2,9 +2,9 @@
 
 Status: target
 
-The passthrough that lets a session use capabilities the user's own harness installation already provides — the MCP servers in `~/.codex/config.toml` or `~/.claude.json`, and the harness vendor's bundled capability plugins (Codex Computer Use, Codex Chrome browser use) — without weakening the isolation posture that keeps a Proliferate launch reproducible. Owner spec: [README.md](README.md). Delivery rides the session MCP pipeline owned by sessions ([sessions](../sessions/README.md)); this section owns discovery, selection, and the curated bundles.
+The passthrough that lets a session use capabilities the user's own harness installation already provides — the MCP servers in `~/.codex/config.toml` or `~/.claude.json`, and the harness vendor's bundled capability plugins (Codex Computer Use, Codex Chrome browser use) — without weakening the isolation posture that keeps a Proliferate launch reproducible. Owner spec: [README.md](README.md). Delivery rides the sessions-owned `SessionExtension` seam ([extensions.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/extensions.rs)); this section owns discovery, selection, the curated bundles, and its own extension.
 
-**The one-line boundary, repeated on both sides:** harnesses *discovers and selects* native integrations; sessions *delivers* them (as ordinary [mcp_bindings](../../../anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/assembly.rs) entries). The product MCPs of [product-mcp-servers.md](../subagents/product-mcp-servers.md) are Proliferate-authored servers; native integrations are user-environment servers — the two never share a registry.
+**The one-line boundary, repeated on both sides:** harnesses *discovers and selects* native integrations and hands sessions a `SessionLaunchExtras` through its registered `SessionExtension`; sessions *delivers* those extras exactly as it delivers every other extension's — the assembly boundary ([assembly.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/assembly.rs)) is unchanged and sessions owns no native-integrations code. The product MCPs of [product-mcp-servers.md](../subagents/product-mcp-servers.md) are Proliferate-authored servers; native integrations are user-environment servers — the two never share a registry.
 
 ## Mental model
 
@@ -16,16 +16,16 @@ Native integrations answers one question: *which specific pieces of the user's n
 flowchart LR
     A["native config<br/>~/.codex, ~/.claude.json"] -->|"discover (read-only)"| B["NativeIntegration list"]
     B -->|"user toggles<br/>(settings pane)"| C["native_integration_selections"]
-    C -->|"session launch"| D["mcp_bindings assembly<br/>(sessions-owned)"]
-    D -->|"ACP session/new mcpServers"| E["harness adapter"]
+    C -->|"session launch"| D["NativeIntegrationsSessionExtension<br/>→ SessionLaunchExtras"]
+    D -->|"sessions' extension seam,<br/>ACP session/new mcpServers"| E["harness adapter"]
 ```
 
 ## Owned state
 
 | State | Where | Written by |
 | --- | --- | --- |
-| `native_integration_selections` — which discovered integrations are enabled, per agent kind | new migration under [persistence/sql/](../../../anyharness/crates/anyharness-lib/src/persistence/sql) | the selection API only |
-| Curated bundle definitions (Computer Use, Chrome) — id, harness kind, required on-disk artifacts, servers + env + skill text to inject | compiled in, next to the bundled registry ([registry/](../../../anyharness/crates/anyharness-lib/src/domains/agents/registry/schema.rs)) | compiled in |
+| `native_integration_selections` — which discovered integrations are enabled, per agent kind | [0077_native_integration_selections.sql](../../../anyharness/crates/anyharness-lib/src/persistence/sql/0077_native_integration_selections.sql), accessed only through [store.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/native_integrations/store.rs) | the selection API only (`PUT …/native-integrations/{id}`) |
+| Curated bundle definitions (Computer Use, Chrome) — id, harness kind, required on-disk artifacts, servers + env + skill text to inject | compiled in ([bundles.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/native_integrations/bundles.rs)) | compiled in |
 
 ```sql
 CREATE TABLE native_integration_selections (
@@ -41,25 +41,31 @@ Discovery results are **derived, never stored** (same posture as readiness: reso
 
 ## Discovery
 
-A read-only parser per harness kind, in a new `domains/agents/native_integrations/` module, producing:
+A read-only parser per harness kind: [discovery.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/native_integrations/discovery.rs) exposes `discover(kind, home)` and dispatches to `discover_codex.rs` / `discover_claude.rs` plus the compiled-in `bundles.rs`, producing ([model.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/native_integrations/model.rs)):
 
 ```rust
 pub struct NativeIntegration {
-    pub id: String,                    // "bundle:computer-use" | "mcp:linear"
+    pub id: String,                    // BUNDLE_ID_PREFIX "bundle:" | MCP_ID_PREFIX "mcp:"
     pub agent_kind: AgentKind,
     pub kind: NativeIntegrationKind,   // McpStdio | McpHttp | Bundle
     pub display_name: String,
+    pub description: Option<String>,
+    pub source: Option<String>,        // which native file/dir this came from
     pub available: bool,               // required artifacts present on disk
     pub unavailable_reason: Option<String>,
     pub risk: NativeIntegrationRisk,   // None | DesktopControl | BrowserControl
+    pub spawn: Option<NativeSpawn>,    // Stdio{command,args,env} | Http{url,headers}
+    pub skill_text: Option<String>,    // bundle SKILL.md text, first-prompt append
 }
 ```
+
+`spawn` and `skill_text` never leave the runtime: the service's wire mapping drops them, and `NativeSpawn`'s `Debug` impl redacts env and header values (they may hold user tokens). Wire responses instead carry `enabled` — merged in by the service from the selection store, never stored on the domain model.
 
 | Harness | Read from | Yields |
 | --- | --- | --- |
 | codex | `~/.codex/config.toml` `[mcp_servers.*]` (command/args/env/cwd, or url/headers) | one `McpStdio`/`McpHttp` integration per entry, spawn spec verbatim |
 | codex | bundled-plugin marketplaces under `~/.codex/.tmp/bundled-marketplaces/openai-bundled/plugins/<name>/` (`.mcp.json` + `skills/*/SKILL.md`) | inputs to the curated bundles below; never listed raw |
-| claude | `~/.claude.json` `mcpServers` and the workspace's `.mcp.json` | one integration per entry |
+| claude | `~/.claude.json` `mcpServers` (home scope only — selections are global per agent kind, so workspace `.mcp.json` files are out of v1's reach; see Current gaps) | one integration per entry |
 
 Discovery only parses. It never spawns a server, never probes, never writes. `available` is a pure file-existence check on the artifacts a bundle's recipe names.
 
@@ -69,28 +75,28 @@ Raw config entries are meaningless UX for vendor capabilities, so vendor capabil
 
 | Bundle | Harness | Required on disk (`available` check) | Injects |
 | --- | --- | --- | --- |
-| `bundle:computer-use` | codex | `node_repl` binary under `/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/`; Sky client under `~/.codex/computer-use/Codex Computer Use.app`; the bundled plugin dir | stdio server `node_repl` with the env block from the user's `[mcp_servers.node_repl]` (`SKY_CUA_SERVICE_PATH`, `NODE_REPL_TRUSTED_SERVICES`, `CODEX_HOME`, trusted-path vars), plus the plugin's `SKILL.md` text as a first-prompt append |
-| `bundle:chrome` | codex | the `chrome@openai-bundled` plugin cache and the same `node_repl` binary | the same `node_repl` server with the browser service env; the chrome plugin's skill text |
+| `bundle:computer-use` | codex | `node_repl` binary under `/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/`; Sky client under `~/.codex/computer-use/Codex Computer Use.app`; the bundled plugin dir | the Sky REPL as a stdio server named **`cua_repl`** (never `node_repl` — see Laws) with the env block from the user's `[mcp_servers.node_repl]` (`SKY_CUA_SERVICE_PATH`, `NODE_REPL_TRUSTED_SERVICES`, `CODEX_HOME`, trusted-path vars), plus the plugin's `SKILL.md` text — rewritten to name the tool `cua_repl` — as a first-prompt append |
+| `bundle:chrome` | codex | the `chrome@openai-bundled` plugin cache and the same `node_repl` binary | the same binary injected as **`browser_repl`** with the browser-service env (the `BROWSER_USE_*` keys and the trusted-services entry pointing at the plugin cache's browser service script are always the derived chrome set, never the user's sky-only table); the chrome plugin's skill text, referring to the tool by the injected name |
 
 The functional surface of Codex Computer Use is exactly `node_repl` + the Sky env: verified by an A/B `codex exec` run where the full config drove `sky.list_apps()` against the live desktop and the neutralized config (`registry.json` defaultArgs) reported the tool unavailable. Plugin *hooks* and the marketplace machinery are deliberately not injected — they would require `features.plugins=true` and reopen the whole config surface for no functional gain.
 
 ## Delivery
 
-At session launch, when `native_integration_selections` has rows for the session's agent kind:
+Delivery is a `SessionExtension`, not an assembly change. [extension.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/native_integrations/extension.rs) defines `NativeIntegrationsSessionExtension`, registered in the app's `session_extensions` vec ([app/mod.rs](../../../anyharness/crates/anyharness-lib/src/app/mod.rs)); its `resolve_launch_extras` delegates to [launch_extras.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/native_integrations/launch_extras.rs). [assembly.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/assembly.rs) is unchanged and sessions owns no delta — the extension seam already merges every extension's extras.
 
 ```text
-resolve_native_launch_extras(workspace, record):
-    selections = load_selections(agent_kind)                   -- absence of rows: return empty
-    discovered = discover(agent_kind)                          -- fresh read from disk
+resolve_native_launch_extras(store, home, agent_kind) -> SessionLaunchExtras:
+    selections = store.list_enabled(agent_kind)                -- absence of rows: return default
+    discovered = discover(agent_kind, home)                    -- fresh read from disk
     for sel in selections:
-        match discovered.find(sel.integration_id):
-            Some(i) if i.available -> extras.mcp_servers += materialize(i)   -- SessionMcpServer::{Stdio,Http}
+        match discovered.find(sel):
+            Some(i) if i.available -> extras.mcp_servers += materialize(i.spawn)  -- SessionMcpServer::{Stdio,Http}
                                       extras.first_prompt_append += i.skill_text
-            Some(i)                -> extras.binding_summaries += unavailable(i)  -- visible, not silent
-            None                   -> extras.binding_summaries += stale(sel)      -- visible, not silent
+            Some(i)                -> extras.binding_summaries += not_applied(NativeUnavailable)  -- visible, not silent
+            None                   -> extras.binding_summaries += not_applied(NativeStale)        -- visible, not silent
 ```
 
-The extras merge into [assemble_session_mcp_launch](../../../anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/assembly.rs) as one more source alongside product extras (that one-line delta is a **sessions** change, filed against [sessions](../sessions/README.md)), flow out through [to_acp_servers](../../../anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/acp.rs) unchanged, and appear in the session's binding summaries ([summaries.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/summaries.rs)) like every other binding. Skill text rides the existing `first_prompt_system_prompt_append` channel — the mechanism assembly already uses because Codex ignores `systemPrompt.append` session meta.
+The extras flow out through [to_acp_servers](../../../anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/acp.rs) unchanged and appear in the session's binding summaries ([summaries.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/summaries.rs)) like every other binding; the not-applied cases use the `SessionMcpBindingNotAppliedReason` variants `NativeUnavailable` and `NativeStale` ([mcp.rs](../../../anyharness/crates/anyharness-contract/src/v1/mcp.rs)). Skill text rides the existing `first_prompt_system_prompt_append` channel — the mechanism assembly already uses because Codex ignores `systemPrompt.append` session meta.
 
 ## Laws
 
@@ -101,6 +107,8 @@ The extras merge into [assemble_session_mcp_launch](../../../anyharness/crates/a
 **Discovery never executes.** The parser reads files and stats paths; it spawns nothing. A malformed native config yields an empty or partial listing with a per-entry error, never a launch failure.
 
 **Every injected server is enumerable.** Anything materialized by this system appears in the session's MCP binding summaries; an unavailable or stale selection appears there as an error entry rather than being silently dropped. A capability that can control the desktop must never be invisibly present or invisibly absent.
+
+**Injected servers never reuse a harness-owned name, and every launch's injected names are unique.** The Computer Use bundle injects the Sky REPL as `cua_repl` and the Chrome bundle as `browser_repl`, never `node_repl`: codex cancels a thread-config MCP server whose name collides with the plugin-owned one — startup reports "cancelled" even with zero `-c` args (verified live) — and each bundle's skill text refers to the tool by its own injected name so the model calls what actually exists. Raw discovery skips the vendor's `node_repl` entry outright (the bundles are the sanctioned re-admission of that capability), and materialization refuses — `NativeNameCollision`, visible in the binding summaries — any selected server whose name collides with a reserved Proliferate/bundle name or with another selected server, because codex-acp's session config is name-keyed and a collision silently clobbers one side ([launch_extras.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/native_integrations/launch_extras.rs)).
 
 **Bundles are compiled in; raw entries are verbatim.** A curated bundle's servers/env/skill recipe is Proliferate-authored and versioned with the binary; a raw `mcp:*` selection injects the user's config entry unmodified. Nothing in between — no runtime-edited recipes.
 
@@ -125,44 +133,58 @@ Every row is the existing settings vocabulary — `SettingsSection` over `Roster
 | Bundle artifacts missing (no desktop app, plugin never provisioned) | integration listed `available: false` with reason; toggle disabled; if previously selected, launch adds an unavailable binding-summary entry and injects nothing | user provisions via the vendor app; next launch picks it up (discovery is per-launch) |
 | Selection references a server no longer in native config | stale binding-summary entry, nothing injected | user re-toggles off, or restores the config entry |
 | Malformed native config file | that harness's discovery returns a parse-error listing; launches proceed with zero native extras | user fixes the file |
-| `node_repl` fails to spawn at harness side | codex reports the MCP server startup failure through existing ACP/session channels; the turn degrades to "tool unavailable" | see gaps: `codex-code-mode-host` install |
+| the injected `cua_repl` server fails to spawn at harness side | codex reports the MCP server startup failure through existing ACP/session channels; the turn degrades to "tool unavailable" | the `codex-code-mode-host` companion is installer-staged and reconciled (`ReinstallReason::MissingCompanion`, [distribution.md](distribution.md)) |
 | Cloud surface | all integrations unavailable by law | not applicable |
 
-## Code map (target)
+## Code map
 
 ```text
 anyharness/crates/anyharness-lib/src/domains/agents/native_integrations/
-├── mod.rs                      NativeIntegration model, ids, risk taxonomy
-├── discover_codex.rs           config.toml + bundled-plugin parsing (read-only)
-├── discover_claude.rs          ~/.claude.json + workspace .mcp.json parsing (read-only)
+├── mod.rs                      module doc + re-exports
+├── model.rs                    NativeIntegration, NativeSpawn (Debug-redacted), id prefixes
+├── discovery.rs                discover(kind, home) — per-harness dispatch (read-only)
+├── discover_codex.rs           config.toml + bundled-plugin parsing
+├── discover_claude.rs          ~/.claude.json mcpServers parsing (home scope; see gaps)
 ├── bundles.rs                  compiled-in curated bundle recipes + availability checks
-└── launch_extras.rs            selections × discovery → SessionMcpServer + prompt appends
-anyharness/crates/anyharness-lib/src/persistence/sql/00XX_native_integration_selections.sql
-anyharness/crates/anyharness-contract/src/v1/…                 list + select wire shapes
-anyharness/crates/anyharness-lib/src/api/http/…                GET list / PUT selection routes
+├── store.rs                    NativeIntegrationSelectionStore over native_integration_selections
+├── service.rs                  list/set_enabled; to_wire drops spawn + skill_text
+├── launch_extras.rs            selections × discovery → SessionLaunchExtras
+└── extension.rs                NativeIntegrationsSessionExtension (the delivery seam)
+anyharness/crates/anyharness-lib/src/persistence/sql/0077_native_integration_selections.sql
+anyharness/crates/anyharness-contract/src/v1/native_integrations.rs    wire shapes
+anyharness/crates/anyharness-lib/src/api/http/agent_native_integrations.rs
+    GET /v1/agents/{kind}/native-integrations           → NativeIntegrationsResponse
+    PUT /v1/agents/{kind}/native-integrations/{id}      body {enabled} → NativeIntegrationsResponse
 ```
 
-Consumed by sessions at [assembly.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/assembly.rs) (their delta); presented by the settings pane (its delta).
+Delivered through sessions' extension seam ([extensions.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/extensions.rs), no sessions delta); presented by the settings pane (its delta). `AppState` carries `native_integrations_service`; the extension is registered in the app's `session_extensions` vec ([app/mod.rs](../../../anyharness/crates/anyharness-lib/src/app/mod.rs)).
 
-> [!decision] PABLO DECIDES: selection scope. Options: (a) workspace × agent
-> kind; (b) global per agent kind (recommended — it lives in the per-harness
-> pane, which has no repo scope, and these are facts about one machine's
-> harness install, not about a repo); (c) per-session with a global default.
-> Recommendation: (b); if (a) or (c) is wanted later, the selection table gains
-> a nullable `workspace_id` and the section grows a scope control — additive.
+## Proof
 
-> [!decision] PABLO DECIDES: v1 surface. Options: (a) curated bundles only;
-> (b) bundles + raw user MCP passthrough (recommended — the raw path is the
-> same mechanism with a verbatim recipe, and it is the half users ask for by
-> name); (c) raw only. Recommendation: (b).
+- Selection store: inline tests in [store.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/native_integrations/store.rs) — fresh store lists nothing, per-kind isolation, idempotent enable, harmless double-disable.
+- Service merge: inline tests in [service.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/native_integrations/service.rs) — a selection discovery no longer reports is listed as stale; disabling a stale selection clears it.
+- Discovery: inline tests in `discover_codex.rs`, `discover_claude.rs`, and `bundles.rs` against fixture home directories (parse verbatim, availability is a pure file check, malformed config degrades per entry).
+- Launch extras: inline tests in `launch_extras.rs` — available/unavailable/stale selections produce servers, `NativeUnavailable`, and `NativeStale` summaries respectively; zero selections produce default extras.
+- Settings surface: `HarnessNativeIntegrationsSection` component tests and the section's hook tests beside their sources under [harness/](../../../apps/packages/product-client/src/components/settings/panes/agents/harness/HarnessPane.tsx) (sibling `.test.tsx` idiom).
+
+> [!decision] RULED 2026-08-27 (Pablo): selection scope is (b) — global per
+> agent kind. It lives in the per-harness pane, which has no repo scope; these
+> are facts about one machine's harness install. If workspace or per-session
+> scope is wanted later, the selection table gains a nullable `workspace_id`
+> and the section grows a scope control — additive.
+
+> [!decision] RULED 2026-08-27 (Pablo): v1 surface is (b) — curated bundles
+> plus raw user MCP passthrough. The raw path is the same mechanism with a
+> verbatim recipe, and it is the half users ask for by name.
 
 ## Current gaps
 
-Nothing below exists on `main`; the body above is the destination.
+The body above is the destination; struck items record what landed and what was learned. The spec stays `Status: target` until this list empties.
 
-- [ ] **Verify codex-acp merge order.** ACP-supplied `mcpServers` must survive the CLI `-c mcp_servers={}` override in the fork's session config assembly ([fork patch](../../../catalogs/agents/adapter-migration/codex-acp-1.1.14+fork-registration.patch) shows `request.mcpServers` reaching `createSessionConfig`; whether CLI `-c` overrides win over session-config servers is unverified). If the flag wins, the fork applies session servers after overrides — a small adapter patch, versioned through the registry's pinned Git ref.
-- [x] **Installer: stage `codex-code-mode-host` next to the native codex binary.** Done: the registry's `tarball_release` install declares `companions[]`, the catalog pins each companion per platform (sha256 from the same GitHub release), the installer places it beside `codex` ([pinned.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/pinned.rs)), and a missing pinned companion is a `ReinstallReason::MissingCompanion` so existing installs converge on the next reconcile ([distribution.md](distribution.md)).
-- [ ] **Verify computer-use approval flow over ACP.** The headless proof ran `approval: never`; a live Proliferate session must show codex's computer-use confirmations surfacing through codex-acp's permission mapping, or name the gap.
-- [ ] `domains/agents/native_integrations/` module, migration, contract routes, harness-pane section — the build itself.
+- [x] **Verify codex-acp merge order.** Verified live (codex-acp 1.1.14-proliferate.1 / codex 0.147.0): codex-acp spawns `codex app-server` with **no** `-c` flags at all — it parses `-c` overrides into its own config, and `createSessionConfig` sets `mcp_servers` *after* spreading those overrides, so ACP-supplied servers survive `-c mcp_servers={}`. No adapter patch needed.
+- [x] **Installer: stage `codex-code-mode-host` next to the native codex binary.** Done: the registry's `tarball_release` install declares `companions[]`, the catalog pins each companion per platform (sha256 from the same GitHub release), the installer places it beside `codex` ([pinned.rs](../../../anyharness/crates/anyharness-lib/src/domains/agents/installer/pinned.rs)), and a missing pinned companion is a `ReinstallReason::MissingCompanion` so existing installs converge on the next reconcile ([distribution.md](distribution.md)). Landed in PR #2311.
+- [ ] **Computer-use write actions never prompt over ACP today — decide the consent posture.** Verified: the Sky `js` tool self-declares `readOnlyHint: true` (observed via a direct `tools/list` handshake), and codex's MCP approval gate (`requires_mcp_tool_approval`) exempts read-only-hinted tools under both `Auto` and `Writes` modes — so codex cannot distinguish `sky.click()` from `sky.list_apps()` and neither ever raises `session/request_permission` (confirmed by a live ACP spike: zero permission requests). The only codex-side knob is per-server config `tools.js.approval_mode = "prompt"` (prompts on *every* call, reads included), which the ACP-injected server config cannot carry today — codex-acp's `createMcpSeverConfig` emits only command/args/env. The vendor-side per-app macOS approval prompts (the Sky client's own) still apply. Options for Pablo: accept vendor-side prompts as the consent surface (today's behavior), extend codex-acp to pass per-tool approval config, or wait for per-call annotations upstream. No real click/type actions are run on a developer's desktop during verification.
+- [ ] **Claude workspace `.mcp.json` discovery.** v1 discovery is home-scope only (`~/.claude.json`): selections are global per agent kind and `discover(kind, home)` carries no workspace path. Re-admitting workspace-scoped `.mcp.json` entries needs a workspace dimension on discovery and the selection surface — additive, out of v1 (adversarial review flagged the original Discovery row as over-promising; the row now says home-only).
+- [ ] The build itself. The skeleton is in — migration `0077`, contract shapes, `GET`/`PUT` routes, store, service, extension wiring — with `discovery.rs` and `launch_extras.rs` landing their real implementations, and the harness-pane section its UI, in this slice's lanes.
 - [ ] **Session-level visibility.** The "every injected server is enumerable" law is only half-met today: MCP binding summaries reach the client session record ([summary.ts](../../../apps/packages/product-client/src/lib/domain/sessions/summary.ts)) but no component renders them — there is no session surface showing which servers a session launched with. This gap predates native integrations; it becomes load-bearing once a desktop-control server can be among them. Owner: chat/workspace-surface (their delta); this spec only names it.
-- [ ] The one-line extras-source delta in sessions' [assembly.rs](../../../anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/assembly.rs) and the boundary-law sentence in [product-mcp-servers.md](../subagents/product-mcp-servers.md) §370 admitting the second source — filed against their owners in the delivery PR.
+- [x] The boundary sentence in [product-mcp-servers.md](../subagents/product-mcp-servers.md) admitting that session extensions may contribute servers to the launch boundary, naming native integrations. Done (its "Session MCP Binding Modules" section). The once-planned extras-source delta in sessions' assembly.rs turned out not to exist: delivery is a `SessionExtension` and sessions owns no delta (see Delivery).

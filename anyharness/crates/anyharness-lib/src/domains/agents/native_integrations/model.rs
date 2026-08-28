@@ -2,9 +2,31 @@
 //! plus the spawn spec and skill text that must never leave the runtime.
 //! Spec: `specs/systems/harnesses/native-integrations.md`, "Discovery".
 
-pub use anyharness_contract::v1::{NativeIntegrationKind, NativeIntegrationRisk};
-
 use crate::domains::agents::model::AgentKind;
+
+/// How a native integration reaches the session once selected. Domain twin of
+/// the contract enum of the same name (AH-CONTRACT-1: domain code never names
+/// wire types; the api layer maps this to the wire shape at its boundary).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeIntegrationKind {
+    /// A raw stdio MCP server from the user's native harness config.
+    McpStdio,
+    /// A raw HTTP MCP server from the user's native harness config.
+    McpHttp,
+    /// A Proliferate-curated bundle over vendor-provisioned artifacts
+    /// (Codex Computer Use, Codex Chrome).
+    Bundle,
+}
+
+/// What a native integration can reach once it is running. Domain twin of the
+/// contract enum of the same name (AH-CONTRACT-1: domain code never names wire
+/// types; the api layer maps this to the wire shape at its boundary).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeIntegrationRisk {
+    None,
+    DesktopControl,
+    BrowserControl,
+}
 
 /// Id prefix for curated bundles.
 pub const BUNDLE_ID_PREFIX: &str = "bundle:";
@@ -71,4 +93,26 @@ pub struct NativeIntegration {
     pub spawn: Option<NativeSpawn>,
     /// Bundle skill text appended to the session's first prompt.
     pub skill_text: Option<String>,
+}
+
+/// One discovered integration merged with the user's selection — the merge the
+/// service performs over [`NativeIntegration`], which deliberately carries no
+/// `enabled` of its own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedNativeIntegration {
+    pub integration: NativeIntegration,
+    /// Whether a selection row exists for this integration.
+    pub enabled: bool,
+}
+
+/// Everything the service knows about one harness's integrations: the domain
+/// answer the api layer maps to the wire response (AH-CONTRACT-1: the mapping
+/// lives there, so this listing never names a wire type).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeIntegrationListing {
+    pub agent_kind: AgentKind,
+    pub integrations: Vec<ListedNativeIntegration>,
+    /// Enabled integration ids that discovery no longer finds — a config entry
+    /// the user removed natively. Surfaced so the user sees what to fix.
+    pub stale_selections: Vec<String>,
 }

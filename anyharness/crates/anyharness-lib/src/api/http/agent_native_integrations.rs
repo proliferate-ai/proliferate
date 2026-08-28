@@ -1,10 +1,14 @@
 //! Routes for native integrations: list one harness's discovered integrations
 //! with the user's selections, and flip one selection. Both answer from the
-//! `NativeIntegrationsService`; the wire shapes are the contract's.
+//! `NativeIntegrationsService`, which speaks domain shapes only; this file is
+//! the mapper boundary (AH-CONTRACT-1) that turns the domain listing into the
+//! contract's wire response.
 //! Spec: `specs/systems/harnesses/native-integrations.md`, "Settings surface".
 
 use anyharness_contract::v1::{
-    NativeIntegrationSelectionRequest, NativeIntegrationsResponse, ProblemDetails,
+    NativeIntegration as WireNativeIntegration, NativeIntegrationKind as WireNativeIntegrationKind,
+    NativeIntegrationRisk as WireNativeIntegrationRisk, NativeIntegrationSelectionRequest,
+    NativeIntegrationsResponse, ProblemDetails,
 };
 use axum::{
     extract::{Path, State},
@@ -14,6 +18,12 @@ use axum::{
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::domains::agents::model::AgentKind;
+use crate::domains::agents::native_integrations::model::{
+    NativeIntegrationKind, NativeIntegrationRisk,
+};
+use crate::domains::agents::native_integrations::{
+    ListedNativeIntegration, NativeIntegrationListing,
+};
 use crate::domains::agents::registry::descriptor;
 
 #[utoipa::path(
@@ -31,11 +41,11 @@ pub async fn list_native_integrations(
     Path(kind): Path<String>,
 ) -> Result<Json<NativeIntegrationsResponse>, ApiError> {
     let kind = validate_kind(&kind)?;
-    let response = state
+    let listing = state
         .native_integrations_service
         .list(&kind)
         .map_err(|error| ApiError::internal(format!("native-integrations read failed: {error}")))?;
-    Ok(Json(response))
+    Ok(Json(wire_response(listing)))
 }
 
 #[utoipa::path(
@@ -59,13 +69,64 @@ pub async fn set_native_integration_selection(
 ) -> Result<Json<NativeIntegrationsResponse>, ApiError> {
     let kind = validate_kind(&kind)?;
     validate_integration_id(&id)?;
-    let response = state
+    let listing = state
         .native_integrations_service
         .set_enabled(&kind, &id, request.enabled)
         .map_err(|error| {
             ApiError::internal(format!("native-integrations write failed: {error}"))
         })?;
-    Ok(Json(response))
+    Ok(Json(wire_response(listing)))
+}
+
+/// The mapper boundary: the domain listing becomes the wire response here,
+/// and nowhere below the api layer.
+fn wire_response(listing: NativeIntegrationListing) -> NativeIntegrationsResponse {
+    NativeIntegrationsResponse {
+        agent_kind: listing.agent_kind.as_str().to_string(),
+        integrations: listing
+            .integrations
+            .into_iter()
+            .map(wire_integration)
+            .collect(),
+        stale_selections: listing.stale_selections,
+    }
+}
+
+/// Wire projection of one listed integration: everything but the spawn spec
+/// and skill text, which never leave the runtime.
+fn wire_integration(listed: ListedNativeIntegration) -> WireNativeIntegration {
+    let ListedNativeIntegration {
+        integration,
+        enabled,
+    } = listed;
+    WireNativeIntegration {
+        id: integration.id,
+        agent_kind: integration.agent_kind.as_str().to_string(),
+        kind: wire_kind(integration.kind),
+        display_name: integration.display_name,
+        description: integration.description,
+        source: integration.source,
+        available: integration.available,
+        unavailable_reason: integration.unavailable_reason,
+        risk: wire_risk(integration.risk),
+        enabled,
+    }
+}
+
+fn wire_kind(kind: NativeIntegrationKind) -> WireNativeIntegrationKind {
+    match kind {
+        NativeIntegrationKind::McpStdio => WireNativeIntegrationKind::McpStdio,
+        NativeIntegrationKind::McpHttp => WireNativeIntegrationKind::McpHttp,
+        NativeIntegrationKind::Bundle => WireNativeIntegrationKind::Bundle,
+    }
+}
+
+fn wire_risk(risk: NativeIntegrationRisk) -> WireNativeIntegrationRisk {
+    match risk {
+        NativeIntegrationRisk::None => WireNativeIntegrationRisk::None,
+        NativeIntegrationRisk::DesktopControl => WireNativeIntegrationRisk::DesktopControl,
+        NativeIntegrationRisk::BrowserControl => WireNativeIntegrationRisk::BrowserControl,
+    }
 }
 
 fn validate_kind(kind: &str) -> Result<AgentKind, ApiError> {

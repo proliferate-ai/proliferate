@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode, SVGProps } from "react";
 import { Plug } from "#product/primitives/icons/platform";
+import { BrowserUseGlyph, ComputerUseGlyph } from "#product/primitives/icons/product";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 import axiomIcon from "../../../../assets/connector-icons/axiom.svg";
 import axiomDarkIcon from "../../../../assets/connector-icons/axiom-dark.svg";
@@ -59,6 +60,12 @@ function TavilyGlyph({ className, ...props }: SVGProps<SVGSVGElement>) {
 const INTEGRATION_GLYPHS: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
   linear: LinearGlyph,
   tavily: TavilyGlyph,
+  // Native-integration curated bundles (native-integrations.md, "Icons"):
+  // Proliferate-drawn marks, never the vendor plugin's proprietary artwork.
+  // Raw `mcp:*` rows pass their prefixed id as the namespace and land on the
+  // Plug fallback — a user-typed server name must not brand-match a logo.
+  "computer-use": ComputerUseGlyph,
+  "chrome-browser-use": BrowserUseGlyph,
 };
 
 interface IntegrationIconImageConfig {

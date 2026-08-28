@@ -1,5 +1,6 @@
 use anyharness_contract::v1::{
-    ErrorEventDetails, InteractionKind, InteractionOutcome, SessionMcpBindingSummary,
+    ErrorEventDetails, InteractionKind, InteractionOutcome, SessionMcpBindingNotAppliedReason,
+    SessionMcpBindingOutcome, SessionMcpBindingSummary, SessionMcpTransport,
 };
 
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
@@ -13,6 +14,83 @@ pub struct SessionLaunchExtras {
     pub first_prompt_system_prompt_append: Vec<String>,
     pub mcp_servers: Vec<SessionMcpServer>,
     pub mcp_binding_summaries: Vec<SessionMcpBindingSummary>,
+}
+
+/// The domain-facing vocabulary extensions use when they report MCP binding
+/// work, so they never name wire types: this file (the grandfathered contract
+/// seam) owns the one mapping onto the contract's binding-summary rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaunchBindingTransport {
+    Http,
+    Stdio,
+}
+
+/// Why a binding an extension resolved was not applied to the launch. Same
+/// seam rule as [`LaunchBindingTransport`]: extensions speak this vocabulary,
+/// and only this file maps it to the wire reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaunchBindingSkip {
+    NativeUnavailable,
+    NativeStale,
+    NativeNameCollision,
+}
+
+impl SessionLaunchExtras {
+    /// Record one binding this launch applies.
+    pub fn push_binding_applied(
+        &mut self,
+        id: &str,
+        server_name: &str,
+        display_name: Option<String>,
+        transport: LaunchBindingTransport,
+    ) {
+        self.mcp_binding_summaries.push(SessionMcpBindingSummary {
+            id: id.to_string(),
+            server_name: server_name.to_string(),
+            display_name,
+            transport: wire_transport(transport),
+            outcome: SessionMcpBindingOutcome::Applied,
+            reason: None,
+        });
+    }
+
+    /// Record one binding this launch refused, with the reason it skipped.
+    pub fn push_binding_not_applied(
+        &mut self,
+        id: &str,
+        server_name: &str,
+        display_name: Option<String>,
+        transport: LaunchBindingTransport,
+        skip: LaunchBindingSkip,
+    ) {
+        self.mcp_binding_summaries.push(SessionMcpBindingSummary {
+            id: id.to_string(),
+            server_name: server_name.to_string(),
+            display_name,
+            transport: wire_transport(transport),
+            outcome: SessionMcpBindingOutcome::NotApplied,
+            reason: Some(wire_skip_reason(skip)),
+        });
+    }
+}
+
+fn wire_transport(transport: LaunchBindingTransport) -> SessionMcpTransport {
+    match transport {
+        LaunchBindingTransport::Http => SessionMcpTransport::Http,
+        LaunchBindingTransport::Stdio => SessionMcpTransport::Stdio,
+    }
+}
+
+fn wire_skip_reason(skip: LaunchBindingSkip) -> SessionMcpBindingNotAppliedReason {
+    match skip {
+        LaunchBindingSkip::NativeUnavailable => {
+            SessionMcpBindingNotAppliedReason::NativeUnavailable
+        }
+        LaunchBindingSkip::NativeStale => SessionMcpBindingNotAppliedReason::NativeStale,
+        LaunchBindingSkip::NativeNameCollision => {
+            SessionMcpBindingNotAppliedReason::NativeNameCollision
+        }
+    }
 }
 
 #[derive(Debug)]

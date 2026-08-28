@@ -26,6 +26,8 @@ mod service;
 mod store;
 
 pub use extension::NativeIntegrationsSessionExtension;
-pub use model::{NativeIntegration, NativeSpawn};
+pub use model::{
+    ListedNativeIntegration, NativeIntegration, NativeIntegrationListing, NativeSpawn,
+};
 pub use service::NativeIntegrationsService;
 pub use store::NativeIntegrationSelectionStore;

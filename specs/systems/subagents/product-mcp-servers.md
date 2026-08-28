@@ -367,7 +367,7 @@ Shared code handles JSON-RPC. Product code handles product meaning.
 
 ## Session MCP Binding Modules
 
-`domains/sessions/mcp_bindings/**` owns the central session MCP launch boundary.
+`domains/sessions/mcp_bindings/**` owns the central session MCP launch boundary. Product MCPs are not its only injected source: registered session extensions may contribute servers and prompt appends to the same boundary through their `SessionLaunchExtras` — today, native integrations ([native-integrations.md](../harnesses/native-integrations.md)) — and those arrive through the sessions-owned extension seam, never as assembly-internal special cases.
 
 File responsibilities:
 

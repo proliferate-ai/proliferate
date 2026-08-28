@@ -355,6 +355,39 @@ export function Hand({ className, ...props }: IconProps) {
   );
 }
 
+/**
+ * Proliferate-drawn mark for the `bundle:computer-use` native integration
+ * (native-integrations.md, "Icons"): a desktop display with a pointer being
+ * driven inside it. Never the vendor's own plugin artwork.
+ */
+export function ComputerUseGlyph({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect x="2" y="3" width="20" height="13" rx="2" />
+      <path d="M8 21h8" />
+      <path d="M12 16v5" />
+      <path d="m9 6 3.5 8 1.2-3.3L17 9.5z" />
+    </svg>
+  );
+}
+
+/**
+ * Proliferate-drawn mark for the `bundle:chrome` native integration
+ * (native-integrations.md, "Icons"): a browser window with a pointer being
+ * driven inside it. Never the vendor's own plugin artwork.
+ */
+export function BrowserUseGlyph({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="M2 9h20" />
+      <path d="M5.5 6.5h.01" />
+      <path d="M8.5 6.5h.01" />
+      <path d="m10 12 3 6.5 1-2.7 2.7-1z" />
+    </svg>
+  );
+}
+
 export function Quote({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>
