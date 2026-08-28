@@ -227,6 +227,19 @@
             },
             "platformMap": {
               "$ref": "#/$defs/nonEmptyStringMap"
+            },
+            "companions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "versionedUrlTemplate", "expectedBinaryTemplate"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": { "type": "string", "minLength": 1 },
+                  "versionedUrlTemplate": { "type": "string", "minLength": 1 },
+                  "expectedBinaryTemplate": { "type": "string", "minLength": 1 }
+                }
+              }
             }
           }
         },

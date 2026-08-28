@@ -20,7 +20,9 @@ use super::progress::{InstallProgressPhase, InstallProgressReporter};
 use super::{InstallError, InstalledArtifactResult};
 use crate::domains::agents::model::{AgentKind, ArtifactRole, Platform};
 use crate::domains::agents::readiness::paths::{artifact_root, managed_pinned_binary_path};
-use crate::integrations::agent_cli::executable::{is_valid_executable, make_executable};
+use crate::integrations::agent_cli::executable::{
+    is_valid_executable, make_executable, platform_binary_filename,
+};
 use crate::integrations::agent_cli::launcher::{
     generate_launcher_script, managed_launcher_file_name,
 };
@@ -66,7 +68,11 @@ pub(super) fn install_binary_or_archive_from_pin(
                 version: Some(version.to_string()),
             })
         }
-        ResolvedPinSource::Archive { targets, .. } => {
+        ResolvedPinSource::Archive {
+            targets,
+            companions,
+            ..
+        } => {
             let target = pick_target(targets)?;
             let expected_binary = target
                 .expected_binary
@@ -83,6 +89,31 @@ pub(super) fn install_binary_or_archive_from_pin(
                 role,
             )?;
             make_executable(&target_path)?;
+            // Companions land beside the main binary so the CLI finds them on
+            // `PATH` (the launcher prepends `managed_dir`). A companion the
+            // pin does not resolve for this platform is skipped, never fatal:
+            // the main binary is still a complete install of the pin.
+            for companion in companions {
+                let Some(companion_target) = current_platform_target(&companion.targets) else {
+                    continue;
+                };
+                let companion_path = companion_path(runtime_home, kind, role, &companion.name);
+                let expected_member = companion_target
+                    .expected_binary
+                    .clone()
+                    .unwrap_or_else(|| companion.name.clone());
+                download_and_extract_archive_verified(
+                    &companion_target.url,
+                    &expected_member,
+                    &managed_dir,
+                    &companion_path,
+                    &companion_target.sha256,
+                    companion_target.download_size_bytes,
+                    reporter,
+                    role,
+                )?;
+                make_executable(&companion_path)?;
+            }
             Ok(InstalledArtifactResult {
                 role: role.clone(),
                 path: target_path,
@@ -178,7 +209,7 @@ pub(super) fn install_agent_process_from_pin(
                 "pinned_npm",
             )
         }
-        ResolvedPinSource::Archive { targets, args } => {
+        ResolvedPinSource::Archive { targets, args, .. } => {
             if is_valid_executable(&launcher_path) && !reinstall {
                 return Ok(None);
             }
@@ -255,6 +286,27 @@ fn pick_target(
     targets
         .get(platform.registry_key())
         .ok_or_else(|| InstallError::NoPinForPlatform(platform.registry_key().to_string()))
+}
+
+/// Like `pick_target`, but absence is not an error: companions are optional
+/// per platform.
+fn current_platform_target(
+    targets: &std::collections::BTreeMap<String, ResolvedPinTarget>,
+) -> Option<&ResolvedPinTarget> {
+    let platform = Platform::detect()?;
+    targets.get(platform.registry_key())
+}
+
+/// Where a pinned companion binary lives once installed: beside the main
+/// artifact, named for the host platform (`.exe` on Windows). Readiness
+/// planning reads this path to detect a missing sidecar.
+pub(super) fn companion_path(
+    runtime_home: &Path,
+    kind: &AgentKind,
+    role: &ArtifactRole,
+    name: &str,
+) -> std::path::PathBuf {
+    artifact_root(runtime_home, kind, role).join(platform_binary_filename(name))
 }
 
 #[cfg(test)]

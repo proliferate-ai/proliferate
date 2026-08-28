@@ -177,7 +177,14 @@
             "linux_arm64": "aarch64-unknown-linux-musl",
             "windows_x64": "x86_64-pc-windows-msvc.exe",
             "windows_arm64": "aarch64-pc-windows-msvc.exe"
-          }
+          },
+          "companions": [
+            {
+              "name": "codex-code-mode-host",
+              "versionedUrlTemplate": "https://github.com/openai/codex/releases/download/{version}/codex-code-mode-host-{target}.tar.gz",
+              "expectedBinaryTemplate": "codex-code-mode-host-{target}"
+            }
+          ]
         }
       },
       "agentProcess": {

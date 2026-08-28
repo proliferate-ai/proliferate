@@ -133,6 +133,8 @@ pub enum AgentRegistryNativeInstall {
         versioned_url_template: String,
         expected_binary_template: String,
         platform_map: HashMap<String, String>,
+        #[serde(default)]
+        companions: Vec<AgentRegistryNativeCompanion>,
     },
     #[serde(rename = "path_only")]
     PathOnly {
@@ -186,6 +188,16 @@ pub enum AgentRegistryAgentProcessInstall {
     },
     #[serde(rename = "manual")]
     Manual { docs_url: String },
+}
+
+/// A sidecar release asset installed beside a `tarball_release` native CLI;
+/// see `model::NativeCompanionSpec`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRegistryNativeCompanion {
+    pub name: String,
+    pub versioned_url_template: String,
+    pub expected_binary_template: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
