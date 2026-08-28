@@ -9,22 +9,44 @@ use crate::live::sessions::driver::types::{
 use crate::live::sessions::fork_dispatch::ForkDispatchDurable;
 use crate::live::sessions::model::SessionStartupStrategy;
 use anyharness_contract::v1::SessionActionCapabilities;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
-pub(in crate::live::sessions) fn build_system_prompt_meta(
+/// The ACP session meta a launch carries: the `systemPrompt.append` key when
+/// there is an append, and `claudeCode.options.extraArgs` when the launch
+/// carries harness arguments (native-integrations.md, "Delivery" — the Agent
+/// SDK's `extraArgs` shape, forwarded verbatim by claude-agent-acp). `None`
+/// when neither is present, so a plain launch sends no meta at all.
+pub(in crate::live::sessions) fn build_launch_meta(
     system_prompt_append: Option<&str>,
+    harness_args: &BTreeMap<String, String>,
 ) -> Option<acp::schema::Meta> {
-    let append = system_prompt_append?.trim();
-    if append.is_empty() {
+    let mut meta = acp::schema::Meta::default();
+    if let Some(append) = system_prompt_append
+        .map(str::trim)
+        .filter(|append| !append.is_empty())
+    {
+        meta.insert(
+            "systemPrompt".to_string(),
+            serde_json::json!({
+                "append": append,
+            }),
+        );
+    }
+    if !harness_args.is_empty() {
+        meta.insert(
+            "claudeCode".to_string(),
+            serde_json::json!({
+                "options": {
+                    "extraArgs": harness_args,
+                },
+            }),
+        );
+    }
+    if meta.is_empty() {
         return None;
     }
-
-    Some(acp::schema::Meta::from_iter([(
-        "systemPrompt".to_string(),
-        serde_json::json!({
-            "append": append,
-        }),
-    )]))
+    Some(meta)
 }
 
 /// Merges a targeted fork's provider anchor into the base meta (built from
@@ -88,8 +110,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_system_prompt_meta_uses_append_shape() {
-        let meta = build_system_prompt_meta(Some("Rename the branch")).expect("meta");
+    fn build_launch_meta_uses_the_append_shape() {
+        let meta = build_launch_meta(Some("Rename the branch"), &BTreeMap::new()).expect("meta");
 
         assert_eq!(
             serde_json::to_value(&meta).ok(),
@@ -102,8 +124,44 @@ mod tests {
     }
 
     #[test]
+    fn build_launch_meta_emits_both_keys_when_both_present() {
+        let harness_args = BTreeMap::from([("chrome".to_string(), String::new())]);
+        let meta = build_launch_meta(Some("Rename the branch"), &harness_args).expect("meta");
+        assert_eq!(
+            serde_json::to_value(&meta).ok(),
+            Some(serde_json::json!({
+                "systemPrompt": {"append": "Rename the branch"},
+                "claudeCode": {"options": {"extraArgs": {"chrome": ""}}},
+            }))
+        );
+    }
+
+    #[test]
+    fn build_launch_meta_omits_claude_code_when_there_are_no_harness_args() {
+        let meta = build_launch_meta(Some("Rename the branch"), &BTreeMap::new()).expect("meta");
+        assert_eq!(
+            serde_json::to_value(&meta).ok(),
+            Some(serde_json::json!({"systemPrompt": {"append": "Rename the branch"}}))
+        );
+        assert!(build_launch_meta(None, &BTreeMap::new()).is_none());
+        assert!(build_launch_meta(Some("   "), &BTreeMap::new()).is_none());
+    }
+
+    #[test]
+    fn build_launch_meta_carries_only_harness_args_when_there_is_no_append() {
+        let harness_args = BTreeMap::from([("chrome".to_string(), String::new())]);
+        let meta = build_launch_meta(None, &harness_args).expect("meta");
+        assert_eq!(
+            serde_json::to_value(&meta).ok(),
+            Some(serde_json::json!({
+                "claudeCode": {"options": {"extraArgs": {"chrome": ""}}},
+            }))
+        );
+    }
+
+    #[test]
     fn merge_targeted_fork_anchor_meta_carries_both_keys_when_both_present() {
-        let base = build_system_prompt_meta(Some("Rename the branch"));
+        let base = build_launch_meta(Some("Rename the branch"), &BTreeMap::new());
         let anchor = ProviderForkAnchor::UpToMessageId("msg-1".to_string());
         let merged = merge_targeted_fork_anchor_meta(base, Some(&anchor)).expect("meta");
         assert_eq!(
@@ -173,9 +231,9 @@ mod tests {
     }
 
     #[test]
-    fn build_system_prompt_meta_skips_blank_values() {
-        assert!(build_system_prompt_meta(None).is_none());
-        assert!(build_system_prompt_meta(Some("   ")).is_none());
+    fn build_launch_meta_skips_blank_values() {
+        assert!(build_launch_meta(None, &BTreeMap::new()).is_none());
+        assert!(build_launch_meta(Some("   "), &BTreeMap::new()).is_none());
     }
 
     #[test]
@@ -368,6 +426,7 @@ pub(in crate::live::sessions) async fn start_native_session(
     workspace_path: &std::path::Path,
     mcp_servers: &[SessionMcpServer],
     system_prompt_append: Option<&str>,
+    harness_args: &BTreeMap<String, String>,
     startup_strategy: &SessionStartupStrategy,
     action_capabilities: SessionActionCapabilities,
     session_id: &str,
@@ -386,6 +445,7 @@ pub(in crate::live::sessions) async fn start_native_session(
                 workspace_path,
                 mcp_servers,
                 system_prompt_append,
+                harness_args,
                 session_id,
                 workspace_id,
                 startup_strategy_label,
@@ -417,7 +477,7 @@ pub(in crate::live::sessions) async fn start_native_session(
                         workspace_path.to_path_buf(),
                     )
                     .mcp_servers(to_acp_servers(mcp_servers))
-                    .meta(build_system_prompt_meta(system_prompt_append)),
+                    .meta(build_launch_meta(system_prompt_append, harness_args)),
                 )
                 .block_task()
                 .await
@@ -457,6 +517,7 @@ pub(in crate::live::sessions) async fn start_native_session(
                         workspace_path,
                         mcp_servers,
                         system_prompt_append,
+                        harness_args,
                         session_id,
                         workspace_id,
                         startup_strategy_label,
@@ -509,6 +570,7 @@ pub(in crate::live::sessions) async fn start_native_session(
                 workspace_path,
                 mcp_servers,
                 system_prompt_append,
+                harness_args,
                 action_capabilities,
                 fork_operation_id,
                 parent_native_session_id,

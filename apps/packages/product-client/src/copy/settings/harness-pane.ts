@@ -314,6 +314,14 @@ export const HARNESS_PANE_COPY = {
     `${integrationName} drives your real Chrome through the ${displayName} browser service. `
     + "Actions run in your real browser session. "
     + "In a session's tool list it appears as browser_repl.",
+  // The Claude bundle is the CLI's own Claude in Chrome integration: no
+  // Proliferate server, per-action approval in the session, and the CLI's
+  // own server name (native-integrations.md, "Claude in Chrome").
+  nativeIntegrationsConsentBodyClaudeChrome: (integrationName: string) =>
+    `${integrationName} drives your real Chrome through the Claude in Chrome extension. `
+    + "Each browser action asks for your approval in the session before it runs, "
+    + "and the extension's own site permissions still apply. "
+    + "In a session's tool list it appears as claude-in-chrome.",
   nativeIntegrationsConsentConfirm: (integrationName: string) => `Turn on ${integrationName}`,
   // R2.0 (always-managed install): one-time notice when a managed copy lands
   // alongside a harness the user already had on PATH.

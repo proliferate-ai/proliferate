@@ -103,6 +103,7 @@ function LocalNativeIntegrationsSection({
           one. */}
       <NativeIntegrationConsentDialog
         open={consentRow !== null}
+        integrationId={consentRow?.id ?? ""}
         risk={consentRow?.risk ?? "desktop_control"}
         integrationDisplayName={consentRow?.displayName ?? ""}
         harnessDisplayName={displayName}

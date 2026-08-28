@@ -17,11 +17,21 @@ pub struct NativeIntegrationsSessionExtension {
     store: NativeIntegrationSelectionStore,
     /// The home directory discovery reads native config from (`~`).
     home: PathBuf,
+    /// The runtime home the enrolled agent-auth state lives under.
+    runtime_home: PathBuf,
 }
 
 impl NativeIntegrationsSessionExtension {
-    pub fn new(store: NativeIntegrationSelectionStore, home: PathBuf) -> Self {
-        Self { store, home }
+    pub fn new(
+        store: NativeIntegrationSelectionStore,
+        home: PathBuf,
+        runtime_home: PathBuf,
+    ) -> Self {
+        Self {
+            store,
+            home,
+            runtime_home,
+        }
     }
 }
 
@@ -34,6 +44,6 @@ impl SessionExtension for NativeIntegrationsSessionExtension {
         let Some(kind) = AgentKind::parse(&ctx.session.agent_kind) else {
             return Ok(SessionLaunchExtras::default());
         };
-        resolve_native_launch_extras(&self.store, &self.home, &kind)
+        resolve_native_launch_extras(&self.store, &self.home, &self.runtime_home, &kind)
     }
 }

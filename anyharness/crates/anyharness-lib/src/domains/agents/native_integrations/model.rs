@@ -2,6 +2,8 @@
 //! plus the spawn spec and skill text that must never leave the runtime.
 //! Spec: `specs/systems/harnesses/native-integrations.md`, "Discovery".
 
+use std::collections::BTreeMap;
+
 use crate::domains::agents::model::AgentKind;
 
 /// How a native integration reaches the session once selected. Domain twin of
@@ -33,9 +35,9 @@ pub const BUNDLE_ID_PREFIX: &str = "bundle:";
 /// Id prefix for raw native MCP config entries.
 pub const MCP_ID_PREFIX: &str = "mcp:";
 
-/// How to start a native integration's MCP server when it is selected for a
-/// session. Env values and header values may hold user tokens: they are
-/// materialized into session MCP bindings and never logged or persisted.
+/// How a native integration reaches the session when it is selected. Env
+/// values and header values may hold user tokens: they are materialized into
+/// session MCP bindings and never logged or persisted.
 #[derive(Clone, PartialEq, Eq)]
 pub enum NativeSpawn {
     Stdio {
@@ -47,6 +49,12 @@ pub enum NativeSpawn {
         url: String,
         headers: Vec<(String, String)>,
     },
+    /// Not a server of Proliferate's to spawn: harness launch arguments in
+    /// the Agent SDK's `extraArgs` shape (`{"chrome": ""}` renders
+    /// `--chrome`), for a capability whose server the harness starts itself
+    /// once the flag is present (spec "Curated bundles", the Claude row).
+    /// Values are flags, never secrets.
+    HarnessArgs { args: BTreeMap<String, String> },
 }
 
 impl std::fmt::Debug for NativeSpawn {
@@ -63,6 +71,9 @@ impl std::fmt::Debug for NativeSpawn {
                 .field("url", &"<redacted>")
                 .field("header_names", &names_of(headers))
                 .finish(),
+            Self::HarnessArgs { args } => {
+                f.debug_struct("HarnessArgs").field("args", args).finish()
+            }
         }
     }
 }

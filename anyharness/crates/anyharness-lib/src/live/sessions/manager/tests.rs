@@ -110,6 +110,7 @@ fn test_launch(startup: SessionStartupStrategy) -> SessionLaunch {
         mcp_servers: vec![],
         startup,
         prompts: SystemPromptAppends::default(),
+        harness_args: Default::default(),
         last_seq: 0,
     }
 }

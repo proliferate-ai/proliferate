@@ -70,15 +70,18 @@ function listing(overrides?: Partial<NativeIntegrationsResponse>): NativeIntegra
   };
 }
 
-function renderSection(surface: "local" | "cloud" = "local") {
+function renderSection(
+  surface: "local" | "cloud" = "local",
+  harness: { kind: string; displayName: string } = { kind: "codex", displayName: "Codex" },
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
       <HarnessNativeIntegrationsSection
-        harnessKind="codex"
-        displayName="Codex"
+        harnessKind={harness.kind}
+        displayName={harness.displayName}
         surface={surface}
       />
     </QueryClientProvider>,
@@ -241,6 +244,43 @@ describe("HarnessNativeIntegrationsSection", () => {
     );
     await waitFor(() =>
       expect(screen.queryAllByText("Turn on Chrome browser use for Codex?")).toHaveLength(0),
+    );
+  });
+
+  it("gates the Claude in Chrome bundle behind consent with the per-action approval facts", async () => {
+    const claudeChrome: NativeIntegration = {
+      id: "bundle:claude-chrome",
+      agentKind: "claude",
+      kind: "bundle",
+      displayName: "Claude in Chrome",
+      description: "Drive Chrome through the Claude in Chrome extension.",
+      available: true,
+      risk: "browser_control",
+      enabled: false,
+    };
+    clientMocks.listNativeIntegrations.mockResolvedValue(
+      listing({ agentKind: "claude", integrations: [claudeChrome] }),
+    );
+    clientMocks.setNativeIntegrationSelection.mockResolvedValue(
+      listing({ agentKind: "claude", integrations: [{ ...claudeChrome, enabled: true }] }),
+    );
+    renderSection("local", { kind: "claude", displayName: "Claude" });
+
+    await userEvent.click(await screen.findByRole("switch", { name: "Claude in Chrome" }));
+    expect(clientMocks.setNativeIntegrationSelection).not.toHaveBeenCalled();
+    expect(await screen.findAllByText("Turn on Claude in Chrome for Claude?")).not.toHaveLength(0);
+    // The Claude body: per-action approval and the CLI's own server name —
+    // never the codex browser service or browser_repl.
+    expect(screen.getAllByText(/claude-in-chrome/)).not.toHaveLength(0);
+    expect(screen.queryAllByText(/browser_repl/)).toHaveLength(0);
+
+    await userEvent.click(screen.getByRole("button", { name: "Turn on Claude in Chrome" }));
+    await waitFor(() =>
+      expect(clientMocks.setNativeIntegrationSelection).toHaveBeenCalledWith(
+        "claude",
+        "bundle:claude-chrome",
+        true,
+      ),
     );
   });
 

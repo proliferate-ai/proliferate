@@ -3,8 +3,9 @@
 //!
 //! Each selected id resolves to exactly one of four outcomes, and none of
 //! them is silence (law "Every injected server is enumerable"):
-//! - discovered and runnable → a `SessionMcpServer`, the bundle's skill text
-//!   on both prompt channels, and an `Applied` binding summary;
+//! - discovered and runnable → a `SessionMcpServer` (or, for a harness-args
+//!   bundle, its launch arguments), the bundle's skill text on both prompt
+//!   channels, and an `Applied` binding summary;
 //! - discovered but not runnable (artifacts missing, or a listing-only entry
 //!   with no spawn spec) → a `NativeUnavailable` binding summary;
 //! - no longer discovered → a `NativeStale` binding summary;
@@ -15,6 +16,8 @@
 
 use std::path::Path;
 
+use super::auth_posture::claude_auth_posture;
+use super::discovery::DiscoveryContext;
 use super::model::{NativeIntegration, NativeSpawn, BUNDLE_ID_PREFIX, MCP_ID_PREFIX};
 use super::store::NativeIntegrationSelectionStore;
 use super::{bundles, discover_codex, discovery};
@@ -40,6 +43,8 @@ const RESERVED_SERVER_NAMES: &[&str] = &[
     discover_codex::NODE_REPL_SERVER_NAME,
     bundles::CUA_REPL_SERVER_NAME,
     bundles::BROWSER_REPL_SERVER_NAME,
+    // The Claude CLI's own in-process Chrome server (bundles.rs).
+    bundles::CLAUDE_IN_CHROME_SERVER_NAME,
     // domains/agent_operations/mcp/definition.rs
     "proliferate_workspace",
     // domains/cowork/mcp/definition.rs
@@ -49,13 +54,16 @@ const RESERVED_SERVER_NAMES: &[&str] = &[
 ];
 
 /// Resolve the native launch extras for one session of `kind`, reading the
-/// selection rows from `store` and discovering fresh from `home`.
+/// selection rows from `store` and discovering fresh from `home`; the
+/// enrolled agent-auth state under `runtime_home` feeds the Claude in Chrome
+/// bundle's auth posture.
 pub fn resolve_native_launch_extras(
     store: &NativeIntegrationSelectionStore,
     home: &Path,
+    runtime_home: &Path,
     kind: &AgentKind,
 ) -> anyhow::Result<SessionLaunchExtras> {
-    resolve_on_surface(RuntimeSurface::from_env(), store, home, kind)
+    resolve_on_surface(RuntimeSurface::from_env(), store, home, runtime_home, kind)
 }
 
 /// The same flow with the surface explicit, so the cloud law is testable
@@ -66,6 +74,7 @@ fn resolve_on_surface(
     surface: RuntimeSurface,
     store: &NativeIntegrationSelectionStore,
     home: &Path,
+    runtime_home: &Path,
     kind: &AgentKind,
 ) -> anyhow::Result<SessionLaunchExtras> {
     // Law "Local surface only": discovery resolves against the runtime
@@ -83,7 +92,8 @@ fn resolve_on_surface(
     if selections.is_empty() {
         return Ok(SessionLaunchExtras::default());
     }
-    let discovered = discovery::discover(kind, home);
+    let ctx = DiscoveryContext::new(home, claude_auth_posture(runtime_home, home));
+    let discovered = discovery::discover(kind, &ctx);
     Ok(extras_for_selections(&selections, &discovered))
 }
 
@@ -113,9 +123,9 @@ fn extras_for_selections(
     extras
 }
 
-/// One runnable selection: its server, its skill text, its `Applied` summary.
-/// `injected_names` are the server names earlier selections in this launch
-/// already claimed.
+/// One runnable selection: its server (or launch arguments), its skill text,
+/// its `Applied` summary. `injected_names` are the server names earlier
+/// selections in this launch already claimed.
 fn materialize(
     extras: &mut SessionLaunchExtras,
     injected_names: &mut Vec<String>,
@@ -135,6 +145,22 @@ fn materialize(
         return;
     }
     injected_names.push(server_name.clone());
+    // A harness-args bundle injects no server of Proliferate's: the harness
+    // spawns its own once the flag is present. It still claims its name
+    // above and reports `Applied` below, so it is enumerable like a server.
+    if let NativeSpawn::HarnessArgs { args } = spawn {
+        extras
+            .harness_args
+            .extend(args.iter().map(|(key, value)| (key.clone(), value.clone())));
+        push_skill_text(extras, integration);
+        extras.push_binding_applied(
+            &integration.id,
+            &server_name,
+            Some(integration.display_name.clone()),
+            transport_of(spawn),
+        );
+        return;
+    }
     let server = match spawn {
         NativeSpawn::Stdio { command, args, env } => {
             SessionMcpServer::Stdio(SessionMcpStdioServer {
@@ -165,24 +191,29 @@ fn materialize(
                 })
                 .collect(),
         }),
+        NativeSpawn::HarnessArgs { .. } => unreachable!("handled above"),
     };
     extras.mcp_servers.push(server);
-    // Both prompt channels on purpose, mirroring assembly.rs: most harnesses
-    // consume the systemPrompt.append session meta, Codex only receives the
-    // first-prompt channel, and no harness reads both — nothing is delivered
-    // twice.
-    if let Some(skill_text) = &integration.skill_text {
-        extras.system_prompt_append.push(skill_text.clone());
-        extras
-            .first_prompt_system_prompt_append
-            .push(skill_text.clone());
-    }
+    push_skill_text(extras, integration);
     extras.push_binding_applied(
         &integration.id,
         &server_name,
         Some(integration.display_name.clone()),
         transport_of(spawn),
     );
+}
+
+/// Both prompt channels on purpose, mirroring assembly.rs: most harnesses
+/// consume the systemPrompt.append session meta, Codex only receives the
+/// first-prompt channel, and no harness reads both — nothing is delivered
+/// twice.
+fn push_skill_text(extras: &mut SessionLaunchExtras, integration: &NativeIntegration) {
+    if let Some(skill_text) = &integration.skill_text {
+        extras.system_prompt_append.push(skill_text.clone());
+        extras
+            .first_prompt_system_prompt_append
+            .push(skill_text.clone());
+    }
 }
 
 /// Runnable, but its name is reserved or already claimed this launch:
@@ -236,6 +267,9 @@ fn transport_of(spawn: &NativeSpawn) -> LaunchBindingTransport {
     match spawn {
         NativeSpawn::Stdio { .. } => LaunchBindingTransport::Stdio,
         NativeSpawn::Http { .. } => LaunchBindingTransport::Http,
+        // The harness's own in-process server is a stdio server from the
+        // model's side; the row reports that transport.
+        NativeSpawn::HarnessArgs { .. } => LaunchBindingTransport::Stdio,
     }
 }
 
@@ -341,13 +375,75 @@ mod tests {
         assert!(extras.system_prompt_append.is_empty());
         assert!(extras.first_prompt_system_prompt_append.is_empty());
         assert!(extras.mcp_binding_summaries.is_empty());
+        assert!(extras.harness_args.is_empty());
+    }
+
+    fn claude_chrome_bundle() -> NativeIntegration {
+        NativeIntegration {
+            agent_kind: AgentKind::Claude,
+            kind: NativeIntegrationKind::Bundle,
+            display_name: "Claude in Chrome".to_string(),
+            risk: NativeIntegrationRisk::BrowserControl,
+            spawn: Some(NativeSpawn::HarnessArgs {
+                args: std::collections::BTreeMap::from([("chrome".to_string(), String::new())]),
+            }),
+            ..integration("bundle:claude-chrome", None)
+        }
+    }
+
+    #[test]
+    fn a_selected_harness_args_bundle_merges_its_args_and_reports_applied_without_a_server() {
+        let extras = extras_for_selections(
+            &["bundle:claude-chrome".to_string()],
+            &[claude_chrome_bundle()],
+        );
+        assert!(
+            extras.mcp_servers.is_empty(),
+            "the harness spawns its own server"
+        );
+        assert_eq!(
+            extras.harness_args,
+            std::collections::BTreeMap::from([("chrome".to_string(), String::new())])
+        );
+        assert_eq!(extras.mcp_binding_summaries.len(), 1);
+        let summary = summary_json(&extras, 0);
+        assert_eq!(summary["id"], "bundle:claude-chrome");
+        assert_eq!(summary["serverName"], "claude-in-chrome");
+        assert_eq!(summary["displayName"], "Claude in Chrome");
+        assert_eq!(summary["outcome"], "applied");
+        assert_eq!(summary["transport"], "stdio");
+    }
+
+    #[test]
+    fn an_unavailable_harness_args_bundle_injects_no_args() {
+        let mut unavailable = claude_chrome_bundle();
+        unavailable.available = false;
+        unavailable.spawn = None;
+        unavailable.unavailable_reason = Some("sign in natively".to_string());
+        let extras = extras_for_selections(&["bundle:claude-chrome".to_string()], &[unavailable]);
+        assert!(extras.harness_args.is_empty());
+        assert_eq!(summary_json(&extras, 0)["reason"], "native_unavailable");
+    }
+
+    #[test]
+    fn a_raw_selection_named_after_the_clis_chrome_server_is_refused() {
+        let extras = extras_for_selections(
+            &["mcp:claude-in-chrome".to_string()],
+            &[integration("mcp:claude-in-chrome", Some(stdio_spawn()))],
+        );
+        assert!(extras.mcp_servers.is_empty());
+        assert_eq!(summary_json(&extras, 0)["reason"], "native_name_collision");
     }
 
     #[test]
     fn the_absence_of_selection_rows_resolves_to_exactly_todays_launch() {
-        let extras =
-            resolve_native_launch_extras(&store(), &std::env::temp_dir(), &AgentKind::Codex)
-                .unwrap();
+        let extras = resolve_native_launch_extras(
+            &store(),
+            &std::env::temp_dir(),
+            &std::env::temp_dir(),
+            &AgentKind::Codex,
+        )
+        .unwrap();
         assert_no_extras(&extras);
     }
 
@@ -360,6 +456,7 @@ mod tests {
         let extras = resolve_on_surface(
             RuntimeSurface::Cloud,
             &store,
+            &std::env::temp_dir(),
             &std::env::temp_dir(),
             &AgentKind::Codex,
         )
@@ -374,6 +471,7 @@ mod tests {
         let extras = resolve_on_surface(
             RuntimeSurface::Local,
             &store,
+            &std::env::temp_dir(),
             &std::env::temp_dir(),
             &AgentKind::Codex,
         )

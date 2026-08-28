@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use anyharness_contract::v1::{
     ErrorEventDetails, InteractionKind, InteractionOutcome, SessionMcpBindingNotAppliedReason,
     SessionMcpBindingOutcome, SessionMcpBindingSummary, SessionMcpTransport,
@@ -14,6 +16,11 @@ pub struct SessionLaunchExtras {
     pub first_prompt_system_prompt_append: Vec<String>,
     pub mcp_servers: Vec<SessionMcpServer>,
     pub mcp_binding_summaries: Vec<SessionMcpBindingSummary>,
+    /// Harness launch arguments in the Agent SDK's `extraArgs` shape
+    /// (`{"chrome": ""}` renders `--chrome`), for a capability whose server
+    /// the harness spawns itself. Rendered only by the Claude driver path
+    /// (native-integrations.md, "Delivery"); default-empty everywhere else.
+    pub harness_args: BTreeMap<String, String>,
 }
 
 /// The domain-facing vocabulary extensions use when they report MCP binding

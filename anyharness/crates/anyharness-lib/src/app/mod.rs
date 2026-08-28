@@ -373,7 +373,7 @@ impl AppState {
             IntegrationGatewaySessionLaunchExtension::new(runtime_home.clone()),
         );
         let (native_integrations_service, native_integrations_session_extension) =
-            agent_launch::build_native_integrations(&db);
+            agent_launch::build_native_integrations(&db, &runtime_home);
         let product_mcp_launch_catalog =
             product_mcp::build_product_mcp_launch_catalog(product_mcp::LaunchCatalogDeps {
                 runtime_base_url: runtime_base_url.clone(),
