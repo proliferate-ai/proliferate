@@ -6,7 +6,8 @@
 
 use std::path::PathBuf;
 
-use super::discovery::discover;
+use super::auth_posture::claude_auth_posture;
+use super::discovery::{discover, DiscoveryContext};
 use super::model::{ListedNativeIntegration, NativeIntegration, NativeIntegrationListing};
 use super::store::NativeIntegrationSelectionStore;
 use crate::domains::agents::model::AgentKind;
@@ -25,11 +26,22 @@ pub struct NativeIntegrationsService {
     store: NativeIntegrationSelectionStore,
     /// The home directory discovery reads native config from (`~`).
     home: PathBuf,
+    /// The runtime home the enrolled agent-auth state lives under — the
+    /// Claude in Chrome bundle's auth posture is read from there.
+    runtime_home: PathBuf,
 }
 
 impl NativeIntegrationsService {
-    pub fn new(store: NativeIntegrationSelectionStore, home: PathBuf) -> Self {
-        Self { store, home }
+    pub fn new(
+        store: NativeIntegrationSelectionStore,
+        home: PathBuf,
+        runtime_home: PathBuf,
+    ) -> Self {
+        Self {
+            store,
+            home,
+            runtime_home,
+        }
     }
 
     pub fn store(&self) -> &NativeIntegrationSelectionStore {
@@ -51,7 +63,11 @@ impl NativeIntegrationsService {
         kind: &AgentKind,
     ) -> anyhow::Result<NativeIntegrationListing> {
         let enabled = self.store.list_enabled(kind.as_str())?;
-        let discovered = discover(kind, &self.home);
+        let ctx = DiscoveryContext::new(
+            &self.home,
+            claude_auth_posture(&self.runtime_home, &self.home),
+        );
+        let discovered = discover(kind, &ctx);
         let stale_selections = enabled
             .iter()
             .filter(|id| !discovered.iter().any(|integration| &integration.id == *id))
@@ -112,6 +128,7 @@ mod tests {
     fn service() -> NativeIntegrationsService {
         NativeIntegrationsService::new(
             NativeIntegrationSelectionStore::new(Db::open_in_memory().unwrap()),
+            std::env::temp_dir(),
             std::env::temp_dir(),
         )
     }

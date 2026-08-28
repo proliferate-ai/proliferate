@@ -66,6 +66,10 @@ const INTEGRATION_GLYPHS: Record<string, ComponentType<SVGProps<SVGSVGElement>>>
   // Plug fallback — a user-typed server name must not brand-match a logo.
   "computer-use": ComputerUseGlyph,
   "chrome-browser-use": BrowserUseGlyph,
+  // The Claude bundle drives the same capability (a browser being driven), so
+  // it shares the browser-use mark: the glyph depicts what the agent reaches,
+  // never which vendor provides it.
+  "claude-in-chrome": BrowserUseGlyph,
 };
 
 interface IntegrationIconImageConfig {

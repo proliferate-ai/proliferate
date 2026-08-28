@@ -1,6 +1,8 @@
-//! Compiled-in curated bundle recipes over the Codex desktop app's own
-//! artifacts: `bundle:computer-use` (drive local Mac apps) and
-//! `bundle:chrome` (drive the Chrome browser). Spec: "Curated bundles".
+//! Compiled-in curated bundle recipes over vendor-provisioned artifacts:
+//! for codex, `bundle:computer-use` (drive local Mac apps) and `bundle:chrome`
+//! (drive the Chrome browser) over the Codex desktop app's files; for claude,
+//! `bundle:claude-chrome` (the CLI's own Claude in Chrome integration).
+//! Spec: "Curated bundles".
 //!
 //! A recipe is Proliferate-authored and versioned with this binary; the
 //! artifacts it names are the vendor's, already provisioned on the user's
@@ -12,9 +14,12 @@
 //! states its own env precedence — see [`computer_use_env`] and
 //! [`chrome_env`].
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use super::auth_posture::ClaudeAuthPosture;
 use super::discover_codex;
+use super::discovery::DiscoveryContext;
 use super::model::{
     NativeIntegration, NativeIntegrationKind, NativeIntegrationRisk, NativeSpawn, BUNDLE_ID_PREFIX,
 };
@@ -31,6 +36,15 @@ pub(crate) const CUA_REPL_SERVER_NAME: &str = "cua_repl";
 /// instead of one name-keyed entry clobbering the other.
 pub(crate) const BROWSER_REPL_SERVER_NAME: &str = "browser_repl";
 
+/// The name the Claude CLI gives its own in-process Chrome MCP server once
+/// `--chrome` is present. `bundle:claude-chrome` injects no server of its
+/// own; this is the name its binding summary reports (law "Every injected
+/// server is enumerable") and a raw `mcp:` selection may not claim.
+pub(crate) const CLAUDE_IN_CHROME_SERVER_NAME: &str = "claude-in-chrome";
+
+/// The Claude in Chrome bundle's id, minted once here.
+pub(crate) const CLAUDE_CHROME_BUNDLE_ID: &str = "bundle:claude-chrome";
+
 /// The injected server name for a bundle integration id, `None` for an id
 /// this binary does not ship. Lives here, next to where the ids are minted,
 /// so the id→name mapping cannot drift from the recipes.
@@ -38,9 +52,23 @@ pub(crate) fn server_name_for_bundle_id(integration_id: &str) -> Option<&'static
     match integration_id {
         "bundle:computer-use" => Some(CUA_REPL_SERVER_NAME),
         "bundle:chrome" => Some(BROWSER_REPL_SERVER_NAME),
+        CLAUDE_CHROME_BUNDLE_ID => Some(CLAUDE_IN_CHROME_SERVER_NAME),
         _ => None,
     }
 }
+
+/// Where Claude Code registers its Chrome native-messaging host on macOS
+/// (relative to the user's home). The CLI writes this manifest when it sets
+/// Claude in Chrome up for Google Chrome, so its presence is the CLI's own
+/// "extension is installed" mark. v1 checks Google Chrome only (spec gap:
+/// browser coverage).
+const CLAUDE_CHROME_MANIFEST_RELATIVE: &str =
+    "Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anthropic.claude_code_browser_extension.json";
+
+const CLAUDE_CHROME_MANIFEST_MISSING_REASON: &str =
+    "Claude in Chrome extension is not set up for Google Chrome on this Mac";
+const CLAUDE_CHROME_AUTH_REASON: &str =
+    "Claude disables Chrome for gateway, API-key, and seat sessions — sign in natively on the Claude harness pane";
 
 /// Where the desktop app installs the `node_repl` binary and its node
 /// runtime. An absolute vendor path, not under the user's home.
@@ -52,11 +80,49 @@ const CHROME_SKILL_PREAMBLE: &str =
     "The Chrome control REPL is exposed as the `browser_repl` MCP server's `js` tool.";
 
 /// The curated bundles for `kind`, listed in the order the settings pane
-/// shows them. Only codex has bundles today.
-pub(super) fn discover(kind: &AgentKind, home: &Path) -> Vec<NativeIntegration> {
+/// shows them.
+pub(super) fn discover(kind: &AgentKind, ctx: &DiscoveryContext<'_>) -> Vec<NativeIntegration> {
     match kind {
-        AgentKind::Codex => discover_codex_bundles(home, Path::new(CUA_NODE_BIN_DIR)),
+        AgentKind::Codex => discover_codex_bundles(ctx.home, Path::new(CUA_NODE_BIN_DIR)),
+        AgentKind::Claude => vec![claude_chrome(ctx.home, ctx.claude_auth)],
         _ => Vec::new(),
+    }
+}
+
+/// `bundle:claude-chrome` — the agent drives Chrome through the Claude CLI's
+/// own Claude in Chrome integration. Nothing is spawned by Proliferate: the
+/// selection turns into the `--chrome` launch argument and the CLI starts its
+/// in-process `claude-in-chrome` server itself. Available only when the CLI's
+/// extension mark is on disk AND the auth posture is a native login — the
+/// CLI disables Chrome for every rendered method (spec, "Claude in Chrome").
+fn claude_chrome(home: &Path, posture: ClaudeAuthPosture) -> NativeIntegration {
+    let manifest = home.join(CLAUDE_CHROME_MANIFEST_RELATIVE);
+    let unavailable_reason = if !manifest.is_file() {
+        Some(CLAUDE_CHROME_MANIFEST_MISSING_REASON.to_string())
+    } else if posture != ClaudeAuthPosture::NativeLogin {
+        Some(CLAUDE_CHROME_AUTH_REASON.to_string())
+    } else {
+        None
+    };
+    let available = unavailable_reason.is_none();
+    NativeIntegration {
+        id: CLAUDE_CHROME_BUNDLE_ID.to_string(),
+        agent_kind: AgentKind::Claude,
+        kind: NativeIntegrationKind::Bundle,
+        display_name: "Claude in Chrome".to_string(),
+        description: Some(
+            "The agent controls Chrome through the Claude in Chrome extension. Each browser \
+             action asks for approval here; the extension's own site permissions still apply."
+                .to_string(),
+        ),
+        source: Some("Claude Code · Claude in Chrome extension".to_string()),
+        available,
+        unavailable_reason,
+        risk: NativeIntegrationRisk::BrowserControl,
+        spawn: available.then(|| NativeSpawn::HarnessArgs {
+            args: BTreeMap::from([("chrome".to_string(), String::new())]),
+        }),
+        skill_text: None,
     }
 }
 

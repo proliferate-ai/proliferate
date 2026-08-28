@@ -48,13 +48,22 @@ pub(super) fn build_services(
 /// the runtime home.
 pub(super) fn build_native_integrations(
     db: &Db,
+    runtime_home: &Path,
 ) -> (
     Arc<NativeIntegrationsService>,
     Arc<NativeIntegrationsSessionExtension>,
 ) {
     let store = NativeIntegrationSelectionStore::new(db.clone());
     let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
-    let service = Arc::new(NativeIntegrationsService::new(store.clone(), home.clone()));
-    let extension = Arc::new(NativeIntegrationsSessionExtension::new(store, home));
+    let service = Arc::new(NativeIntegrationsService::new(
+        store.clone(),
+        home.clone(),
+        runtime_home.to_path_buf(),
+    ));
+    let extension = Arc::new(NativeIntegrationsSessionExtension::new(
+        store,
+        home,
+        runtime_home.to_path_buf(),
+    ));
     (service, extension)
 }

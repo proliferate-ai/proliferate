@@ -9,17 +9,34 @@
 
 use std::path::Path;
 
+use super::auth_posture::ClaudeAuthPosture;
 use super::model::NativeIntegration;
 use super::{bundles, discover_claude, discover_codex};
 use crate::domains::agents::model::AgentKind;
 
-/// Discover the native integrations of `kind` under `home` (the user's home
-/// directory, where `~/.codex` and `~/.claude.json` live).
-pub fn discover(kind: &AgentKind, home: &Path) -> Vec<NativeIntegration> {
-    let mut integrations = bundles::discover(kind, home);
+/// What discovery reads against: the user's home directory (where `~/.codex`
+/// and `~/.claude.json` live) and the already-resolved facts a bundle's
+/// availability depends on. Facts arrive resolved so discovery itself stays a
+/// pure read of `home`.
+#[derive(Debug, Clone, Copy)]
+pub struct DiscoveryContext<'a> {
+    pub home: &'a Path,
+    /// The Claude in Chrome bundle's auth gate (spec, "Claude in Chrome").
+    pub claude_auth: ClaudeAuthPosture,
+}
+
+impl<'a> DiscoveryContext<'a> {
+    pub fn new(home: &'a Path, claude_auth: ClaudeAuthPosture) -> Self {
+        Self { home, claude_auth }
+    }
+}
+
+/// Discover the native integrations of `kind`.
+pub fn discover(kind: &AgentKind, ctx: &DiscoveryContext<'_>) -> Vec<NativeIntegration> {
+    let mut integrations = bundles::discover(kind, ctx);
     integrations.extend(match kind {
-        AgentKind::Codex => discover_codex::discover(home),
-        AgentKind::Claude => discover_claude::discover(home),
+        AgentKind::Codex => discover_codex::discover(ctx.home),
+        AgentKind::Claude => discover_claude::discover(ctx.home),
         _ => Vec::new(),
     });
     integrations
@@ -66,7 +83,8 @@ mod tests {
             "[mcp_servers.linear]\nurl = \"https://mcp.linear.app/mcp\"\n",
         )
         .unwrap();
-        let ids: Vec<String> = discover(&AgentKind::Codex, home.path())
+        let ctx = DiscoveryContext::new(home.path(), ClaudeAuthPosture::None);
+        let ids: Vec<String> = discover(&AgentKind::Codex, &ctx)
             .into_iter()
             .map(|integration| integration.id)
             .collect();
@@ -77,23 +95,25 @@ mod tests {
     }
 
     #[test]
-    fn claude_discovery_lists_its_raw_config_entries() {
+    fn claude_discovery_lists_the_chrome_bundle_before_its_raw_config_entries() {
         let home = TempDir::new("dispatch-claude");
         std::fs::write(
             home.path().join(".claude.json"),
             r#"{"mcpServers": {"filesystem": {"type": "stdio", "command": "npx"}}}"#,
         )
         .unwrap();
-        let ids: Vec<String> = discover(&AgentKind::Claude, home.path())
+        let ctx = DiscoveryContext::new(home.path(), ClaudeAuthPosture::NativeLogin);
+        let ids: Vec<String> = discover(&AgentKind::Claude, &ctx)
             .into_iter()
             .map(|integration| integration.id)
             .collect();
-        assert_eq!(ids, vec!["mcp:filesystem"]);
+        assert_eq!(ids, vec!["bundle:claude-chrome", "mcp:filesystem"]);
     }
 
     #[test]
     fn a_harness_kind_without_a_parser_discovers_nothing() {
         let home = TempDir::new("dispatch-other");
-        assert!(discover(&AgentKind::Cursor, home.path()).is_empty());
+        let ctx = DiscoveryContext::new(home.path(), ClaudeAuthPosture::None);
+        assert!(discover(&AgentKind::Cursor, &ctx).is_empty());
     }
 }

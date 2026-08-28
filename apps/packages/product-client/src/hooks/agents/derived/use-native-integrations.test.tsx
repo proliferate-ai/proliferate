@@ -88,6 +88,36 @@ describe("useNativeIntegrations", () => {
     expect(namespaces.get("mcp:linear")).toBe("mcp:linear");
   });
 
+  it("maps the Claude in Chrome bundle to its own glyph namespace", async () => {
+    clientMocks.listNativeIntegrations.mockResolvedValue({
+      agentKind: "claude",
+      integrations: [
+        {
+          id: "bundle:claude-chrome",
+          agentKind: "claude",
+          kind: "bundle",
+          displayName: "Claude in Chrome",
+          description: "Drive Chrome through the Claude in Chrome extension.",
+          available: false,
+          unavailableReason: "sign in natively",
+          risk: "browser_control",
+          enabled: false,
+        },
+      ],
+      staleSelections: [],
+    });
+    const { result } = renderHook(() => useNativeIntegrations("claude", true), { wrapper });
+
+    await waitFor(() => expect(result.current.rows).toHaveLength(1));
+    expect(result.current.rows[0]).toMatchObject({
+      id: "bundle:claude-chrome",
+      iconNamespace: "claude-in-chrome",
+      isBundle: true,
+      available: false,
+      unavailableReason: "sign in natively",
+    });
+  });
+
   it("renders a stale selection as an enabled Missing row named after its server", async () => {
     clientMocks.listNativeIntegrations.mockResolvedValue(response);
     const { result } = renderHook(() => useNativeIntegrations("codex", true), { wrapper });

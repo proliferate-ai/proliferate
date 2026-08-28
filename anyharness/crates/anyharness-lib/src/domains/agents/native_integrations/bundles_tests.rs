@@ -83,7 +83,9 @@ impl Fixture {
 fn stdio_env(integration: &NativeIntegration) -> Vec<(String, String)> {
     match integration.spawn.as_ref().expect("spawn") {
         NativeSpawn::Stdio { env, .. } => env.clone(),
-        NativeSpawn::Http { .. } => panic!("bundle spawn must be stdio"),
+        NativeSpawn::Http { .. } | NativeSpawn::HarnessArgs { .. } => {
+            panic!("codex bundle spawn must be stdio")
+        }
     }
 }
 
@@ -96,7 +98,13 @@ fn both_bundles_list_for_codex_and_none_for_other_kinds() {
     assert_eq!(listed[0].risk, NativeIntegrationRisk::DesktopControl);
     assert_eq!(listed[1].id, "bundle:chrome");
     assert_eq!(listed[1].risk, NativeIntegrationRisk::BrowserControl);
-    assert!(discover(&AgentKind::Claude, fixture.home()).is_empty());
+    let ctx = DiscoveryContext::new(fixture.home(), ClaudeAuthPosture::None);
+    assert!(discover(&AgentKind::Cursor, &ctx).is_empty());
+    let claude: Vec<String> = discover(&AgentKind::Claude, &ctx)
+        .into_iter()
+        .map(|integration| integration.id)
+        .collect();
+    assert_eq!(claude, vec!["bundle:claude-chrome"]);
 }
 
 #[test]
@@ -118,7 +126,9 @@ fn a_fully_provisioned_computer_use_bundle_is_available_and_spawns_the_node_repl
             );
             assert!(args.is_empty());
         }
-        NativeSpawn::Http { .. } => panic!("bundle spawn must be stdio"),
+        NativeSpawn::Http { .. } | NativeSpawn::HarnessArgs { .. } => {
+            panic!("bundle spawn must be stdio")
+        }
     }
 }
 
@@ -334,5 +344,86 @@ fn a_missing_chrome_plugin_cache_makes_the_chrome_bundle_unavailable() {
     assert!(
         reason.starts_with("the chrome plugin's cache is not installed"),
         "reason was: {reason}"
+    );
+}
+
+// --- bundle:claude-chrome --------------------------------------------------
+
+fn claude_home_with_manifest(prefix: &str) -> TempDir {
+    let home = TempDir::new(prefix);
+    let manifest = home.path().join(CLAUDE_CHROME_MANIFEST_RELATIVE);
+    std::fs::create_dir_all(manifest.parent().unwrap()).unwrap();
+    std::fs::write(
+        &manifest,
+        r#"{"name": "com.anthropic.claude_code_browser_extension"}"#,
+    )
+    .unwrap();
+    home
+}
+
+#[test]
+fn claude_chrome_is_available_with_the_manifest_and_a_native_login() {
+    let home = claude_home_with_manifest("claude-chrome-native");
+    let bundle = claude_chrome(home.path(), ClaudeAuthPosture::NativeLogin);
+    assert_eq!(bundle.id, "bundle:claude-chrome");
+    assert_eq!(bundle.agent_kind, AgentKind::Claude);
+    assert_eq!(bundle.kind, NativeIntegrationKind::Bundle);
+    assert_eq!(bundle.risk, NativeIntegrationRisk::BrowserControl);
+    assert!(bundle.available, "{:?}", bundle.unavailable_reason);
+    assert_eq!(
+        bundle.spawn,
+        Some(NativeSpawn::HarnessArgs {
+            args: BTreeMap::from([("chrome".to_string(), String::new())]),
+        })
+    );
+    assert_eq!(
+        bundle.skill_text, None,
+        "the CLI ships its own claude-in-chrome skill"
+    );
+}
+
+#[test]
+fn claude_chrome_without_the_manifest_is_unavailable_with_the_setup_reason() {
+    let home = TempDir::new("claude-chrome-no-manifest");
+    let bundle = claude_chrome(home.path(), ClaudeAuthPosture::NativeLogin);
+    assert!(!bundle.available);
+    assert_eq!(
+        bundle.unavailable_reason.as_deref(),
+        Some("Claude in Chrome extension is not set up for Google Chrome on this Mac")
+    );
+    assert_eq!(bundle.spawn, None);
+}
+
+#[test]
+fn claude_chrome_under_a_routed_or_absent_auth_posture_is_unavailable_with_the_sign_in_reason() {
+    let home = claude_home_with_manifest("claude-chrome-routed");
+    for posture in [ClaudeAuthPosture::Routed, ClaudeAuthPosture::None] {
+        let bundle = claude_chrome(home.path(), posture);
+        assert!(!bundle.available, "{posture:?} must not list available");
+        assert_eq!(
+            bundle.unavailable_reason.as_deref(),
+            Some(
+                "Claude disables Chrome for gateway, API-key, and seat sessions — sign in natively on the Claude harness pane"
+            )
+        );
+        assert_eq!(bundle.spawn, None, "{posture:?} must not carry --chrome");
+    }
+}
+
+#[test]
+fn claude_chrome_with_neither_manifest_nor_login_reports_the_setup_reason_first() {
+    let home = TempDir::new("claude-chrome-nothing");
+    let bundle = claude_chrome(home.path(), ClaudeAuthPosture::Routed);
+    assert_eq!(
+        bundle.unavailable_reason.as_deref(),
+        Some("Claude in Chrome extension is not set up for Google Chrome on this Mac")
+    );
+}
+
+#[test]
+fn the_claude_chrome_bundle_reports_under_the_clis_own_server_name() {
+    assert_eq!(
+        server_name_for_bundle_id("bundle:claude-chrome"),
+        Some("claude-in-chrome")
     );
 }

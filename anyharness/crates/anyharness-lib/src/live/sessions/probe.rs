@@ -341,6 +341,7 @@ async fn run_enumeration(
         workspace,
         &mcp_servers,
         None,
+        &std::collections::BTreeMap::new(),
         PROBE_SESSION_ID,
         PROBE_WORKSPACE_ID,
         "catalog_probe",

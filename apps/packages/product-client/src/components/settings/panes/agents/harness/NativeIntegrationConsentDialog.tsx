@@ -10,11 +10,14 @@ import { HARNESS_PANE_COPY } from "#product/copy/settings/harness-pane";
  * The facts are risk-specific — desktop control names the vendor's per-app
  * macOS approvals, Esc as the stop, and the `cua_repl` server name; browser
  * control names the real Chrome it drives, the real signed-in browser
- * session its actions run in, and the `browser_repl` server name. Toggling
- * OFF never routes through here; revoking needs no ceremony.
+ * session its actions run in, and the `browser_repl` server name; the Claude
+ * in Chrome bundle (`bundle:claude-chrome`) names its per-action approval and
+ * the CLI's own `claude-in-chrome` server instead. Toggling OFF never routes
+ * through here; revoking needs no ceremony.
  */
 export function NativeIntegrationConsentDialog({
   open,
+  integrationId,
   risk,
   integrationDisplayName,
   harnessDisplayName,
@@ -23,6 +26,7 @@ export function NativeIntegrationConsentDialog({
   onConfirm,
 }: {
   open: boolean;
+  integrationId: string;
   risk: NativeIntegrationRisk;
   integrationDisplayName: string;
   harnessDisplayName: string;
@@ -37,18 +41,29 @@ export function NativeIntegrationConsentDialog({
         integrationDisplayName,
         harnessDisplayName,
       )}
-      description={
-        risk === "browser_control"
-          ? HARNESS_PANE_COPY.nativeIntegrationsConsentBodyBrowser(
-              integrationDisplayName,
-              harnessDisplayName,
-            )
-          : HARNESS_PANE_COPY.nativeIntegrationsConsentBodyDesktop(integrationDisplayName)
-      }
+      description={consentBody(integrationId, risk, integrationDisplayName, harnessDisplayName)}
       confirmLabel={HARNESS_PANE_COPY.nativeIntegrationsConsentConfirm(integrationDisplayName)}
       loading={loading}
       onClose={onClose}
       onConfirm={onConfirm}
     />
   );
+}
+
+function consentBody(
+  integrationId: string,
+  risk: NativeIntegrationRisk,
+  integrationDisplayName: string,
+  harnessDisplayName: string,
+): string {
+  if (integrationId === "bundle:claude-chrome") {
+    return HARNESS_PANE_COPY.nativeIntegrationsConsentBodyClaudeChrome(integrationDisplayName);
+  }
+  if (risk === "browser_control") {
+    return HARNESS_PANE_COPY.nativeIntegrationsConsentBodyBrowser(
+      integrationDisplayName,
+      harnessDisplayName,
+    );
+  }
+  return HARNESS_PANE_COPY.nativeIntegrationsConsentBodyDesktop(integrationDisplayName);
 }

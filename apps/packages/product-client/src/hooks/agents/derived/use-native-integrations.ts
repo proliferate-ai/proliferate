@@ -23,6 +23,7 @@ import { useNativeIntegrationsQuery } from "#product/hooks/access/anyharness/age
 const BUNDLE_ICON_NAMESPACES: Record<string, string> = {
   "bundle:computer-use": "computer-use",
   "bundle:chrome": "chrome-browser-use",
+  "bundle:claude-chrome": "claude-in-chrome",
 };
 
 export interface NativeIntegrationRow {

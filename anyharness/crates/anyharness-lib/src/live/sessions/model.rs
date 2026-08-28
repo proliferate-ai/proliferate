@@ -136,6 +136,11 @@ pub struct SessionLaunch {
     pub mcp_servers: Vec<SessionMcpServer>,
     pub startup: SessionStartupStrategy,
     pub prompts: SystemPromptAppends,
+    /// Harness launch arguments in the Agent SDK's `extraArgs` shape, rendered
+    /// into the ACP session meta as `claudeCode.options.extraArgs` by the
+    /// Claude driver path. Empty for every other harness (the runtime's
+    /// launch policy drops them before they get here).
+    pub harness_args: BTreeMap<String, String>,
     /// Last persisted event seq. Owned by the manager: it re-reads this under
     /// the start/inject critical section before spawning the actor; caller
     /// values are overwritten.
