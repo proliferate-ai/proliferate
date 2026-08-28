@@ -16,16 +16,63 @@
 //      holds ports 1420/1421 and kills the new launch minutes in. Fail fast
 //      with the holder, or kill it automatically when it is clearly a stale
 //      vite (DEV_PORTS_KILL_STALE=1 skips the prompt-free refusal).
+//   5. `tauri dev` copies the staged sidecar (src-tauri/binaries/anyharness-
+//      <triple>) over target/debug/anyharness right before launch, and that
+//      staged file only refreshes when build.rs reruns — which an edit under
+//      anyharness/crates/ does not trigger (rerun-if-changed on a directory
+//      watches the directory entry, not its files). So a relaunch after a
+//      runtime change silently ran the OLD runtime. Restage from cargo's
+//      current artifact every launch: drop the (possibly clobbered) uplift,
+//      let cargo restore it (0.3s when fresh, a real build when not), then
+//      copy it into binaries/ when the bytes differ.
+//   6. The desktop app is single-instance (tauri-plugin-single-instance): a
+//      second launch hands off to the live window and exits with no message,
+//      leaving the OLD binary — and its possibly dead sidecar — on screen.
+//      A live debug binary from this checkout therefore refuses the launch
+//      even when the ports are free. `--stop` (make dev-local-stop) tears the
+//      whole tree down by command line so a restart is one command.
 //
 // Node instead of a Makefile shell chain for the same reason
 // generate-anyharness-openapi.mjs is a script: portable control flow, and one
 // place that owns the stamp files. Stamps live under .dev-stamps/ (ignored).
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 const repoRoot = process.cwd();
+
+// --stop: kill the dev-local tree of THIS checkout (matched on repoRoot so
+// another worktree's instance is untouched), then exit. Order matters: the
+// make/tauri parents first so they do not respawn what we kill next.
+if (process.argv.includes("--stop")) {
+  const patterns = [
+    "make dev-local$",
+    "tauri dev --config src-tauri/tauri.dev.json",
+    `${repoRoot}/target/debug/proliferate`,
+    `${repoRoot}/apps/desktop/node_modules/.*vite`,
+    `${repoRoot}/target/debug/anyharness`,
+  ];
+  let killed = 0;
+  for (const pattern of patterns) {
+    const found = spawnSync("pgrep", ["-f", pattern], { encoding: "utf8" });
+    const pids = (found.stdout ?? "").split("\n").filter(Boolean).filter((pid) => Number(pid) !== process.pid);
+    for (const pid of pids) spawnSync("kill", [pid]);
+    killed += pids.length;
+  }
+  console.log(`[dev-preflight] stop: killed ${killed} process(es)`);
+  process.exit(0);
+}
 const stampsDir = join(repoRoot, ".dev-stamps");
 mkdirSync(stampsDir, { recursive: true });
 
@@ -110,7 +157,25 @@ phase("sdk build", () => {
   return "rebuilt";
 });
 
-// 3. product-client dist, only when src changed ------------------------------
+// 3. Sidecar restage --------------------------------------------------------
+phase("sidecar staging", () => {
+  const built = join(repoRoot, "target", "debug", "anyharness");
+  // The uplift is a hardlink cargo recreates from deps/ when it is missing
+  // and the unit is fresh; when it is present cargo trusts it, even if tauri
+  // clobbered it with a stale copy. Removing it first makes the next build
+  // authoritative either way.
+  rmSync(built, { force: true });
+  run("cargo", ["build", "-p", "anyharness"]);
+  const host = execFileSync("rustc", ["-vV"], { encoding: "utf8" }).match(/^host: (\S+)$/m)?.[1];
+  if (!host) return "unknown host triple, left as is";
+  const staged = join(repoRoot, "apps", "desktop", "src-tauri", "binaries", `anyharness-${host}`);
+  if (existsSync(staged) && readFileSync(staged).equals(readFileSync(built))) return "fresh";
+  copyFileSync(built, staged);
+  chmodSync(staged, 0o755);
+  return `restaged binaries/anyharness-${host} from cargo's current build`;
+});
+
+// 4. product-client dist, only when src changed ------------------------------
 phase("product-client dist", () => {
   const dist = join(repoRoot, "apps/packages/product-client/dist");
   if (existsSync(dist) && !stale("product-client", ["apps/packages/product-client/src"])) {
@@ -121,7 +186,7 @@ phase("product-client dist", () => {
   return "rebuilt";
 });
 
-// 4. Port preflight ----------------------------------------------------------
+// 5. Port preflight ----------------------------------------------------------
 phase("ports 1420/1421", () => {
   const out = spawnSync("lsof", ["-nP", "-iTCP:1420", "-iTCP:1421", "-sTCP:LISTEN", "-Fpc"], {
     encoding: "utf8",
@@ -133,20 +198,42 @@ phase("ports 1420/1421", () => {
   // A vite holder is only stale when no live desktop app owns it: killing the
   // renderer of a RUNNING dev-local would break that instance, so a live
   // `tauri dev` (or its debug binary) always refuses instead.
-  const liveTauri =
-    spawnSync("pgrep", ["-f", "tauri dev|target/debug/proliferate"], { encoding: "utf8" }).status === 0;
   const allVite = commands.every((c) => /node|vite/.test(c));
-  if (allVite && !liveTauri && process.env.DEV_PORTS_KILL_STALE !== "0") {
+  if (allVite && !liveDesktopApp() && process.env.DEV_PORTS_KILL_STALE !== "0") {
     for (const pid of pids) spawnSync("kill", [pid]);
     return `killed orphaned vite (pid ${pids.join(", ")})`;
   }
   console.error(
     `[dev-preflight] ports 1420/1421 are held by: ${commands.join(", ")} (pid ${pids.join(", ")}).\n` +
-      (liveTauri
-        ? "A dev-local instance is already running. Stop it before launching another."
+      (liveDesktopApp()
+        ? "A dev-local instance is already running: `make dev-local-restart` replaces it."
         : "Stop the holder, or set DEV_PORTS_KILL_STALE=1 to let preflight kill orphaned vite processes."),
   );
   process.exit(1);
 });
+
+// 6. Single-instance preflight ----------------------------------------------
+// Ports free is not enough: the app is single-instance, so launching over a
+// live debug binary silently focuses the old window (possibly with a dead
+// sidecar) and the new `tauri dev` exits — exactly the "I relaunched and
+// nothing changed" trap. Refuse loudly; restart is one make target.
+phase("live desktop app", () => {
+  if (!liveDesktopApp()) return "none";
+  console.error(
+    "[dev-preflight] a dev-local desktop app from this checkout is still running " +
+      "(single-instance: a second launch would hand off to it and exit). " +
+      "Run `make dev-local-restart` to replace it, or `make dev-local-stop`.",
+  );
+  process.exit(1);
+});
+
+/** A live `tauri dev` or debug desktop binary belonging to THIS checkout. */
+function liveDesktopApp() {
+  return (
+    spawnSync("pgrep", ["-f", `${repoRoot}/target/debug/proliferate$|tauri dev --config src-tauri/tauri.dev.json`], {
+      encoding: "utf8",
+    }).status === 0
+  );
+}
 
 console.log(`[dev-preflight] done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
