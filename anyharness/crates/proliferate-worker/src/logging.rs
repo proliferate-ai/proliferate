@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use proliferate_diagnostics_client::{
@@ -6,8 +7,12 @@ use proliferate_diagnostics_client::{
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
+mod file_sink;
+mod format;
 mod scrub;
 
+use file_sink::{create_file_log_sink, FileLogSink};
+use format::{log_format_from_env, LogFormat};
 use scrub::{scrub_breadcrumb, scrub_event, scrub_log};
 
 const TARGET_SENTRY_DSN_ENV: &str = "PROLIFERATE_TARGET_SENTRY_DSN";
@@ -26,6 +31,7 @@ const WORKER_RECORD_NAME_PREFIX: &str = "desktop_worker.";
 pub struct TelemetryGuards {
     _sentry: Option<sentry::ClientInitGuard>,
     diagnostics: Option<DiagnosticsProducerGuard>,
+    _file_log: Option<FileLogSink>,
 }
 
 impl TelemetryGuards {
@@ -144,12 +150,51 @@ pub fn init(activation: DesktopDiagnosticsActivation) -> TelemetryGuards {
         }
         None => (None, None),
     };
-    let console_layer = tracing_subscriber::fmt::layer().with_filter(env_filter_from_env());
+    // One format decision per process, applied to every fmt sink: JSON when a
+    // machine is the reader (cloud runtime env), human text locally.
+    let log_format = log_format_from_env();
+    let console_layer: Box<dyn Layer<tracing_subscriber::Registry> + Send + Sync> = match log_format
+    {
+        LogFormat::Json => tracing_subscriber::fmt::layer()
+            .json()
+            .with_filter(env_filter_from_env())
+            .boxed(),
+        LogFormat::Text => tracing_subscriber::fmt::layer()
+            .with_filter(env_filter_from_env())
+            .boxed(),
+    };
+    let file_log = match create_file_log_sink(&worker_log_path()) {
+        Ok(sink) => Some(sink),
+        Err(error) => {
+            eprintln!("[proliferate-worker] file logging disabled: {error}");
+            None
+        }
+    };
+    let file_layer = file_log.as_ref().map(|sink| {
+        let layer: Box<dyn Layer<_> + Send + Sync> = match log_format {
+            LogFormat::Json => tracing_subscriber::fmt::layer()
+                .json()
+                .with_ansi(false)
+                .with_writer(sink.writer.clone())
+                .with_filter(env_filter_from_env())
+                .boxed(),
+            LogFormat::Text => tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(sink.writer.clone())
+                .with_filter(env_filter_from_env())
+                .boxed(),
+        };
+        layer
+    });
     let _ = tracing_subscriber::registry()
         .with(console_layer)
         .with(sentry_tracing::layer())
         .with(diagnostics_layer)
+        .with(file_layer)
         .try_init();
+    if let Some(sink) = &file_log {
+        tracing::debug!(log_file = %sink.path.display(), "local file logging active");
+    }
 
     if telemetry.is_some() {
         sentry::configure_scope(|scope| {
@@ -184,7 +229,20 @@ pub fn init(activation: DesktopDiagnosticsActivation) -> TelemetryGuards {
     TelemetryGuards {
         _sentry: telemetry,
         diagnostics,
+        _file_log: file_log,
     }
+}
+
+/// The worker's log home: `<home>/.proliferate/worker/logs/worker.log`,
+/// beside its config (`default_config_path`). One known place per process
+/// so the local tail can interleave every runtime log.
+fn worker_log_path() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".proliferate")
+        .join("worker")
+        .join("logs")
+        .join("worker.log")
 }
 
 /// Record naming for this component: no rewritten targets, so every
@@ -279,6 +337,55 @@ mod tests {
     fn sentry_user_absent_for_blank_or_missing() {
         assert!(sentry_user_from_id(None).is_none());
         assert!(sentry_user_from_id(Some("   ")).is_none());
+    }
+
+    #[test]
+    fn json_mode_emits_one_parseable_json_line_per_event() {
+        // Cloud mode's contract with CloudWatch/Grafana (grafana-logging
+        // spec): one event = one JSON line, fields addressable by name. A
+        // machine reader must never have to parse human text.
+        use std::io::Write;
+        use std::sync::{Arc, Mutex};
+        use tracing_subscriber::layer::SubscriberExt;
+
+        #[derive(Clone)]
+        struct SharedBuf(Arc<Mutex<Vec<u8>>>);
+        impl Write for SharedBuf {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().expect("buffer lock").extend_from_slice(buf);
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let buffer = SharedBuf(Arc::new(Mutex::new(Vec::new())));
+        let writer = buffer.clone();
+        let subscriber = tracing_subscriber::registry().with(
+            tracing_subscriber::fmt::layer()
+                .json()
+                .with_ansi(false)
+                .with_writer(move || writer.clone()),
+        );
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::info!(
+                session_id = "0191d1f0-0000-7000-8000-000000000000",
+                outcome = "succeeded",
+                "json mode probe"
+            );
+        });
+
+        let bytes = buffer.0.lock().expect("buffer lock").clone();
+        let text = String::from_utf8(bytes).expect("utf8 log output");
+        let line = text.lines().next().expect("one log line emitted");
+        let value: serde_json::Value = serde_json::from_str(line).expect("log line parses as JSON");
+        let fields = &value["fields"];
+        assert_eq!(fields["message"], "json mode probe");
+        assert_eq!(fields["session_id"], "0191d1f0-0000-7000-8000-000000000000");
+        assert_eq!(fields["outcome"], "succeeded");
+        assert!(value["timestamp"].is_string(), "timestamp present");
+        assert_eq!(value["level"], "INFO");
     }
 
     #[test]

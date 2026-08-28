@@ -3,6 +3,12 @@ use std::sync::Arc;
 use sentry::protocol::{Breadcrumb, Event, Frame, Log, LogEntry, Stacktrace, Value};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
+mod file_sink;
+mod format;
+
+use file_sink::{create_file_log_sink, FileLogSink};
+use format::{log_format_from_env, LogFormat};
+
 const TARGET_SENTRY_DSN_ENV: &str = "PROLIFERATE_TARGET_SENTRY_DSN";
 const TARGET_SENTRY_ENVIRONMENT_ENV: &str = "PROLIFERATE_TARGET_SENTRY_ENVIRONMENT";
 // Component-specific emergency override. The shared
@@ -17,6 +23,7 @@ const RUNTIME_ENV_TAG: &str = "runtime_env";
 
 pub struct TelemetryGuards {
     _sentry: Option<sentry::ClientInitGuard>,
+    _file_log: Option<FileLogSink>,
 }
 
 fn env_or_default(key: &str, default: &str) -> String {
@@ -364,11 +371,50 @@ pub fn init() -> TelemetryGuards {
         ))
     });
 
-    let console_layer = tracing_subscriber::fmt::layer().with_filter(env_filter_from_env());
+    // One format decision per process, applied to every fmt sink: JSON when a
+    // machine is the reader (cloud runtime env), human text locally.
+    let log_format = log_format_from_env();
+    let console_layer: Box<dyn Layer<tracing_subscriber::Registry> + Send + Sync> = match log_format
+    {
+        LogFormat::Json => tracing_subscriber::fmt::layer()
+            .json()
+            .with_filter(env_filter_from_env())
+            .boxed(),
+        LogFormat::Text => tracing_subscriber::fmt::layer()
+            .with_filter(env_filter_from_env())
+            .boxed(),
+    };
+    let file_log = match create_file_log_sink(&supervisor_log_path()) {
+        Ok(sink) => Some(sink),
+        Err(error) => {
+            eprintln!("[proliferate-supervisor] file logging disabled: {error}");
+            None
+        }
+    };
+    let file_layer = file_log.as_ref().map(|sink| {
+        let layer: Box<dyn Layer<_> + Send + Sync> = match log_format {
+            LogFormat::Json => tracing_subscriber::fmt::layer()
+                .json()
+                .with_ansi(false)
+                .with_writer(sink.writer.clone())
+                .with_filter(env_filter_from_env())
+                .boxed(),
+            LogFormat::Text => tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(sink.writer.clone())
+                .with_filter(env_filter_from_env())
+                .boxed(),
+        };
+        layer
+    });
     let _ = tracing_subscriber::registry()
         .with(console_layer)
         .with(sentry_tracing::layer())
+        .with(file_layer)
         .try_init();
+    if let Some(sink) = &file_log {
+        tracing::debug!(log_file = %sink.path.display(), "local file logging active");
+    }
 
     if telemetry.is_some() {
         sentry::configure_scope(|scope| {
@@ -400,7 +446,19 @@ pub fn init() -> TelemetryGuards {
         });
     }
 
-    TelemetryGuards { _sentry: telemetry }
+    TelemetryGuards {
+        _sentry: telemetry,
+        _file_log: file_log,
+    }
+}
+
+/// The supervisor's log home: `<state dir>/logs/supervisor.log`
+/// (`~/.proliferate/supervisor/logs/`). One known place per process so the
+/// local tail can interleave every runtime log.
+fn supervisor_log_path() -> std::path::PathBuf {
+    crate::config::supervisor_state_dir()
+        .join("logs")
+        .join("supervisor.log")
 }
 
 #[cfg(test)]
