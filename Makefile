@@ -397,8 +397,14 @@ dev-init: setup
 dev-list:
 	@node scripts/dev.mjs list
 
+# The preflight replaces the unconditional `sdk-build` dependency: it heals a
+# placeholder runtime binary, rebuilds the SDK and product-client dist only
+# when their inputs changed (mtime stamps under .dev-stamps/), and clears or
+# reports stale port holders — the four measured launch traps. SDK_FORCE=1
+# forces the SDK rebuild; scripts/dev-local-preflight.mjs owns the details.
 dev-local: export PROLIFERATE_DEV := 1
-dev-local: sdk-build
+dev-local:
+	node scripts/dev-local-preflight.mjs
 	@echo "Starting desktop app with the bundled AnyHarness sidecar and no control plane..."
 	cd apps/desktop && pnpm tauri dev --config src-tauri/tauri.dev.json
 

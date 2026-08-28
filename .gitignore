@@ -126,3 +126,4 @@ apps/packages/product-client/src/generated/
 tests/release/node_modules
 tmp/
 .release-e2e/
+.dev-stamps/
