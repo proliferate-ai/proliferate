@@ -66,15 +66,17 @@ class FrontendOldPathsTest(unittest.TestCase):
         # on, and the grace-window timer are the same second source by other
         # routes — each must fail on its own.
         for blocked in (ROTATION_MODULE, FEATURE_FLAGS, TIMED_ONBOARDING_STEP):
-            with self.subTest(blocked=blocked):
-                with tempfile.TemporaryDirectory() as directory:
-                    root = Path(directory)
-                    _write(root, blocked, "export const resurrected = true;\n")
+            with (
+                self.subTest(blocked=blocked),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory)
+                _write(root, blocked, "export const resurrected = true;\n")
 
-                    self.assertEqual(
-                        check_frontend_old_paths.existing_blocked_paths(root),
-                        [blocked],
-                    )
+                self.assertEqual(
+                    check_frontend_old_paths.existing_blocked_paths(root),
+                    [blocked],
+                )
 
     def test_reports_every_resurrected_path_not_just_the_first(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -97,13 +99,15 @@ class FrontendOldPathsTest(unittest.TestCase):
     def test_blocks_the_whole_slice_3_deletion_set(self) -> None:
         self.assertEqual(
             sorted(check_frontend_old_paths.BLOCKED_PATHS),
-            sorted([
-                EVIDENCE_MODULE,
-                STATUS_BADGE,
-                ROTATION_MODULE,
-                FEATURE_FLAGS,
-                TIMED_ONBOARDING_STEP,
-            ]),
+            sorted(
+                [
+                    EVIDENCE_MODULE,
+                    STATUS_BADGE,
+                    ROTATION_MODULE,
+                    FEATURE_FLAGS,
+                    TIMED_ONBOARDING_STEP,
+                ]
+            ),
         )
 
     def test_repo_is_clean(self) -> None:

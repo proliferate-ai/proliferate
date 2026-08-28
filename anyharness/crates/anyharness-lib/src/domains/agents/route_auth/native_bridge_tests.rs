@@ -29,7 +29,8 @@ fn document(present: &[(&str, bool)]) -> AgentAuthState {
         .collect();
     serde_json::from_value(serde_json::json!({
         "version": 2,
-        "revision": 7,
+        "sequence": 7,
+        "lineage": "test-lineage",
         "harnesses": harnesses,
     }))
     .expect("document")
