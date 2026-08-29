@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import { twMerge } from "#product/primitives/utils/tw-merge";
 import { Check } from "#product/primitives/icons/core";
 
@@ -26,21 +26,69 @@ export function RadioCardGroup<Value extends string>({
   className = "",
 }: RadioCardGroupProps<Value>) {
   const horizontal = orientation === "horizontal";
+  const buttonRefs = useRef(new Map<Value, HTMLButtonElement>());
+
+  // Roving tabindex: the selected enabled option is the tab stop, falling
+  // back to the first enabled option otherwise. Arrow keys move selection
+  // and focus together (WAI-ARIA selection-follows-focus).
+  const enabledOptions = options.filter((option) => !option.disabled);
+  const tabStopIndex = Math.max(
+    enabledOptions.findIndex((option) => option.value === value),
+    0,
+  );
+  const tabStopValue = enabledOptions[tabStopIndex]?.value;
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // A modified arrow belongs to whatever chord it's part of, not to us.
+    if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+
+    const forwardKey = horizontal ? "ArrowRight" : "ArrowDown";
+    const backwardKey = horizontal ? "ArrowLeft" : "ArrowUp";
+    const count = enabledOptions.length;
+
+    let nextOption: RadioCardOption<Value> | undefined;
+    if (event.key === forwardKey) {
+      nextOption = enabledOptions[(tabStopIndex + 1) % count];
+    } else if (event.key === backwardKey) {
+      nextOption = enabledOptions[(tabStopIndex - 1 + count) % count];
+    } else if (event.key === "Home") {
+      nextOption = enabledOptions[0];
+    } else if (event.key === "End") {
+      nextOption = enabledOptions[count - 1];
+    }
+
+    if (nextOption) {
+      event.preventDefault();
+      onChange(nextOption.value);
+      buttonRefs.current.get(nextOption.value)?.focus();
+    }
+  };
+
   return (
     <div
       role="radiogroup"
+      aria-orientation={orientation}
       data-orientation={orientation}
       className={twMerge("flex gap-2", horizontal ? "flex-row flex-wrap" : "flex-col", className)}
+      onKeyDown={handleKeyDown}
     >
       {options.map((option) => {
         const selected = value === option.value;
         return (
           <button
             key={option.value}
+            ref={(el) => {
+              if (el) {
+                buttonRefs.current.set(option.value, el);
+              } else {
+                buttonRefs.current.delete(option.value);
+              }
+            }}
             type="button"
             role="radio"
             aria-checked={selected}
             disabled={option.disabled}
+            tabIndex={option.value === tabStopValue ? 0 : -1}
             data-selected={selected ? "" : undefined}
             className={twMerge(
               "relative flex gap-2.5 rounded-lg border bg-background py-3 pl-[13px] pr-[34px] text-left transition-colors disabled:pointer-events-none disabled:opacity-50",
