@@ -21,6 +21,7 @@ use super::error::ApiError;
 use super::workflow_run_commands;
 use super::workspaces_contract::request_origin_or_api_default;
 use crate::app::AppState;
+use crate::domains::agents::launch_options::{LaunchSelection, LaunchSelectionUnsupported};
 use crate::domains::workflows::definition::{
     InvocationPlacement, InvocationSnapshot, PlacementMode, WorkflowDefinition,
 };
@@ -278,6 +279,108 @@ async fn compensate_placement(state: &AppState, placed: &PlacedWorkspace) {
     .await;
 }
 
+/// Fail-fast model admission for a NEW run's snapshot (#1898 defect 1).
+///
+/// A node's `modelId` was previously unchecked at PUT, so an unservable pick
+/// only surfaced minutes later when the chain reached that node — after the
+/// upstream nodes had already done their work. This walks every model-bearing
+/// node once and refuses the whole PUT, naming the offending node, before any
+/// row is inserted.
+///
+/// It does NOT replace the launch-time check and cannot: the observation is
+/// sampled here and the node launches later against a possibly-changed one
+/// (`domains/agents/launch_options/validation.rs` stays the authority). So the
+/// disposition is deliberately asymmetric — a model the observation
+/// AFFIRMATIVELY lacks is fail-closed, while a merely absent or unreadable
+/// observation (a cold runtime that has not probed yet) is fail-open and left
+/// to the launch check. Rejecting there would fail workflow creation for a
+/// reason that has nothing to do with the definition the author wrote.
+async fn admit_node_models(
+    state: &AppState,
+    definition: &WorkflowDefinition,
+) -> Result<(), ApiError> {
+    let picks: Vec<(String, String, LaunchSelection)> = definition
+        .nodes
+        .iter()
+        .filter_map(|node| {
+            let model = node.model.as_ref()?;
+            Some((
+                node.id.clone(),
+                model.agent_kind.clone(),
+                LaunchSelection {
+                    model_id: model.model_id.clone(),
+                    control_values: model.control_values.clone(),
+                },
+            ))
+        })
+        .collect();
+    if picks.is_empty() {
+        return Ok(());
+    }
+    let service = state.launch_options_service.clone();
+    let verdicts = run_blocking("workflow_snapshot_model_admission", move || {
+        anyhow::Ok(
+            picks
+                .into_iter()
+                .map(
+                    |(node_id, agent_kind, selection): (String, String, LaunchSelection)| {
+                        let verdict = service.validate_selection(&agent_kind, &selection);
+                        (node_id, agent_kind, verdict)
+                    },
+                )
+                .collect::<Vec<_>>(),
+        )
+    })
+    .await?
+    .map_err(|error| ApiError::internal(error.to_string()))?;
+    for (node_id, agent_kind, verdict) in verdicts {
+        match verdict {
+            Ok(_) => {}
+            // Fail-closed: the observation is present and does not offer this.
+            Err(LaunchSelectionUnsupported::Model { model_id, .. }) => {
+                return Err(ApiError::bad_request(
+                    format!(
+                        "invalid snapshot: node {node_id} requests model \
+                         '{model_id}' which {agent_kind} does not offer"
+                    ),
+                    SNAPSHOT_INVALID,
+                ));
+            }
+            Err(LaunchSelectionUnsupported::Control { control_id, .. }) => {
+                return Err(ApiError::bad_request(
+                    format!(
+                        "invalid snapshot: node {node_id} requests control \
+                         '{control_id}' which {agent_kind} does not offer"
+                    ),
+                    SNAPSHOT_INVALID,
+                ));
+            }
+            Err(LaunchSelectionUnsupported::ControlValue {
+                control_id, value, ..
+            }) => {
+                return Err(ApiError::bad_request(
+                    format!(
+                        "invalid snapshot: node {node_id} requests value '{value}' \
+                         for control '{control_id}', which {agent_kind} does not offer"
+                    ),
+                    SNAPSHOT_INVALID,
+                ));
+            }
+            // Fail-open: nothing authoritative to judge against yet.
+            Err(error @ LaunchSelectionUnsupported::ObservationUnavailable { .. })
+            | Err(error @ LaunchSelectionUnsupported::Internal(_)) => {
+                tracing::info!(
+                    node_id = %node_id,
+                    agent_kind = %agent_kind,
+                    %error,
+                    "workflow snapshot model admission deferred to launch",
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 #[utoipa::path(
     put,
     path = "/v1/workflow-runs/{run_id}",
@@ -361,6 +464,11 @@ pub async fn put_workflow_run(
             return Ok((StatusCode::OK, Json(projection)));
         }
     }
+
+    // Model admission runs only on the create path, and only after the replay
+    // return above: an existing run keeps its verbatim custody even if its
+    // frozen picks no longer resolve on this machine.
+    admit_node_models(&state, &snapshot.definition).await?;
 
     // Disk before rows: placement, workspace, exclude entry, and context docs
     // all succeed before one row exists — a failure past this point

@@ -482,6 +482,7 @@ fn fail_and_redo_persists_a_running_replacement() {
     let redo = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
         node_row_id: plan_id.clone(),
         prompt: Some("plan again, smaller steps".into()),
+        model: None,
     });
     let applied = decide_and_apply(&store, "run-1", &applied.state, &redo);
     assert_healthy(&applied.state);
@@ -549,6 +550,7 @@ fn redo_from_a_parked_gate_marks_the_old_row_superseded() {
     let redo = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
         node_row_id: review_id.clone(),
         prompt: None,
+        model: None,
     });
     let applied = decide_and_apply(&store, "run-1", &applied.state, &redo);
     assert_healthy(&applied.state);
@@ -598,6 +600,7 @@ fn adhoc_redo_replaces_only_the_adhoc_row() {
     let redo = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
         node_row_id: adhoc_id.clone(),
         prompt: None,
+        model: None,
     });
     let applied = decide_and_apply(&store, "run-1", &applied.state, &redo);
     assert_healthy(&applied.state);
@@ -634,6 +637,7 @@ fn adhoc_redo_replaces_only_the_adhoc_row() {
         &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
             node_row_id: replacement_id,
             prompt: None,
+            model: None,
         }),
     );
     assert!(
@@ -1138,6 +1142,7 @@ fn fence_spares_the_gate_and_fences_orphan_adhocs() {
     let redo = WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
         node_row_id: adhoc_id.clone(),
         prompt: None,
+        model: None,
     });
     let applied = decide_and_apply(&store, "run-1", &applied.state, &redo);
     assert_healthy(&applied.state);

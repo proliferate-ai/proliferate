@@ -453,6 +453,7 @@ fn fail_and_redo_from_failed_creates_replacement() {
         &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
             node_row_id: "n2".into(),
             prompt: None,
+            model: None,
         }),
     ));
     let Transition::Redo {
@@ -486,6 +487,7 @@ fn fail_and_redo_with_edited_prompt_drops_stored_envelope() {
         &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
             node_row_id: "n2".into(),
             prompt: Some("try again differently".into()),
+            model: None,
         }),
     ));
     let Transition::Redo { replacement, .. } = transition else {
@@ -493,6 +495,58 @@ fn fail_and_redo_with_edited_prompt_drops_stored_envelope() {
     };
     assert_eq!(replacement.prompt, "try again differently");
     assert!(replacement.rendered_envelope.is_none());
+}
+
+/// #1896: a chain replacement takes an explicit model override, so a node that
+/// died on an unservable model can be redone onto a servable one. Without the
+/// override a chain row still resolves through the frozen definition, which is
+/// never rewritten — the sealed snapshot keeps showing what was authored.
+#[test]
+fn fail_and_redo_model_override_lands_on_the_chain_replacement() {
+    let state = failed_run();
+    let override_model = super::definition::NodeModel {
+        agent_kind: "claude".into(),
+        model_id: Some("claude-sonnet-5".into()),
+        control_values: Default::default(),
+    };
+    let transition = expect_transition(next(
+        &state,
+        &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+            node_row_id: "n2".into(),
+            prompt: None,
+            model: Some(override_model.clone()),
+        }),
+    ));
+    let Transition::Redo { replacement, .. } = transition else {
+        panic!("expected Redo");
+    };
+    assert_eq!(replacement.model.as_ref(), Some(&override_model));
+    // The envelope is prompt text only, so a model swap does not invalidate it.
+    assert_eq!(replacement.prompt, state.nodes[1].prompt);
+}
+
+/// The inherited resolution is unchanged when no override is supplied: a chain
+/// row defers to the frozen definition (None), never to a stale row pick.
+#[test]
+fn fail_and_redo_without_override_leaves_the_chain_replacement_inheriting() {
+    let mut state = failed_run();
+    state.nodes[1].model = Some(super::definition::NodeModel {
+        agent_kind: "claude".into(),
+        model_id: Some("stale-row-pick".into()),
+        control_values: Default::default(),
+    });
+    let transition = expect_transition(next(
+        &state,
+        &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
+            node_row_id: "n2".into(),
+            prompt: None,
+            model: None,
+        }),
+    ));
+    let Transition::Redo { replacement, .. } = transition else {
+        panic!("expected Redo");
+    };
+    assert!(replacement.model.is_none());
 }
 
 #[test]
@@ -517,6 +571,7 @@ fn fail_and_redo_applies_at_every_pause_state() {
                     &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
                         node_row_id: "n2".into(),
                         prompt: None,
+                        model: None,
                     })
                 ),
                 Decision::Transition(Transition::Redo { .. })
@@ -537,6 +592,7 @@ fn fail_and_redo_on_running_chain_node_disposes_the_live_session() {
         &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
             node_row_id: "n2".into(),
             prompt: None,
+            model: None,
         }),
     ));
     let Transition::Redo {
@@ -563,6 +619,7 @@ fn fail_and_redo_on_running_adhoc_is_illegal() {
             &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
                 node_row_id: "a1".into(),
                 prompt: None,
+                model: None,
             })
         ),
         Decision::Illegal(_)
@@ -589,6 +646,7 @@ fn fail_and_redo_on_superseded_node_is_illegal() {
             &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
                 node_row_id: "n2".into(),
                 prompt: None,
+                model: None,
             })
         ),
         Decision::Illegal(_)
@@ -980,6 +1038,7 @@ fn fail_and_redo_on_paused_adhoc_mints_an_adhoc_replacement() {
             &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
                 node_row_id: "a1".into(),
                 prompt: None,
+                model: None,
             }),
         ));
         let Transition::Redo {
@@ -1016,6 +1075,7 @@ fn fail_and_redo_on_awaiting_human_adhoc_is_illegal() {
             &WorkflowEvent::Command(WorkflowCommand::FailAndRedo {
                 node_row_id: "a1".into(),
                 prompt: None,
+                model: None,
             })
         ),
         Decision::Illegal(_)
