@@ -167,6 +167,11 @@ class AgentAuthStateSource(BaseModel):
 class AgentAuthStateHarness(BaseModel):
     harness_kind: str
     sources: list[AgentAuthStateSource]
+    # Present exactly when ``sources`` is empty (present-but-empty fails
+    # closed): the renderer's plain-words refusal vocabulary naming why the
+    # selection could not be satisfied (agent_auth spec §2 — "the refusal
+    # names the actual reason"). Never rides beside a rendered source.
+    unsatisfied_reason: str | None = None
     settings: dict[str, Any] | None = None
 
 
@@ -212,6 +217,28 @@ class AgentAuthDeliveryAckResponse(AgentGatewayBaseModel):
     surface: AgentAuthSurface
     acked_revision: int = Field(alias="ackedRevision")
     acked_at: str = Field(alias="ackedAt")
+
+
+# --------------------------------------------------------------------------- #
+# Seats
+# --------------------------------------------------------------------------- #
+
+
+# The observed limit window (spec §2 `seat_usage_sample.binding_window`).
+AgentSeatLimitWindow = Literal["five_hour", "seven_day"]
+
+
+class AgentSeatLimitHitRequest(AgentGatewayBaseModel):
+    """The courier's relay of a runtime-observed seat limit hit (spec §3 flow 5).
+
+    ``window`` is which utilization window bound (null when the provider error
+    did not say); ``resetAt`` is the reset time the error carried. Cooling is
+    runtime-local and never waits on this report — the route only feeds the
+    meters and the audit events.
+    """
+
+    window: AgentSeatLimitWindow | None = None
+    reset_at: datetime = Field(alias="resetAt")
 
 
 # --------------------------------------------------------------------------- #

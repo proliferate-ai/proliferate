@@ -40,6 +40,10 @@ pub struct RenderedRouteAuth {
     /// Isolated config files the launcher must write after render. Pure data:
     /// producing this list touches no disk (contract §4 two-phase render).
     pub files: Vec<FileSpec>,
+    /// The vault seat id the seat render arm actually rendered (never token
+    /// material), so the launch can record which seat served on a successful
+    /// spawn. Data only — `None` for every non-seat route.
+    pub serving_seat_id: Option<String>,
 }
 
 impl RenderedRouteAuth {
@@ -101,10 +105,12 @@ fn render_sources(
     // `rendered.set` because only THIS arm's names may exempt a claude rerouting
     // flag from sanitization — see `sanitize_claude_ambient`.
     let mut provider_config_keys: BTreeSet<String> = BTreeSet::new();
-    // Seats v1, no rotation: the document carries the seat pool in vault
-    // order, and the FIRST seat serves. Later seat sources are next-in-line
-    // for the rotation slice; composing more than one would let a later
-    // seat's token overwrite the serving one's, so they are skipped here.
+    // The rotated launch seam (mod.rs) filters the pool to the ONE chosen
+    // seat before render, so a launch profile reaching here carries at most
+    // one. Unrotated callers (probe/readiness/materialization) still hand the
+    // full pool over, and first-seat-wins stays as their deterministic
+    // behavior — composing more than one seat would let a later token
+    // overwrite the serving one's, so extras are skipped regardless.
     let mut seat_applied = false;
     for source in &sources.sources {
         match source {
@@ -479,6 +485,9 @@ fn render_seat(
                 revision: 0,
                 contents: None,
             });
+            // The serving-seat channel (data only): the seat this arm actually
+            // rendered, for confirm_served on a successful spawn.
+            rendered.serving_seat_id = Some(profile.seat_id.clone());
             Ok(())
         }
         _ => Err(RouteAuthError::UnsupportedRoute {

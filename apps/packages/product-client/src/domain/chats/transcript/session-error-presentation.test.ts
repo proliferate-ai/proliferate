@@ -28,6 +28,52 @@ describe("presentSessionError", () => {
     });
   });
 
+  it("turns a seat plan-limit death into plain words with the relaunch recovery", () => {
+    // A date that can never be "today" again, so the day clause is stable.
+    const resetAt = "2026-01-05T18:00:00Z";
+    const presentation = presentSessionError(errorItem({
+      code: "seat_usage_limit",
+      message: "seat usage limit reached",
+      details: {
+        kind: "seat_usage_limit",
+        seatId: "seat-1",
+        "window": "five_hour",
+        resetAt,
+      } as unknown as ErrorItem["details"],
+    }));
+
+    const time = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" })
+      .format(new Date(resetAt));
+    const day = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" })
+      .format(new Date(resetAt));
+    expect(presentation).toMatchObject({
+      title: "Claude.ai plan limit reached",
+      description:
+        `This session's Claude.ai login hit its plan limit. It resets at ${time} on ${day}.`,
+      fallbackModelLabel: null,
+      recoveryAction: "relaunch_session",
+    });
+    // No bare code reaches the human copy.
+    expect(presentation.title).not.toContain("seat_usage_limit");
+    expect(presentation.description).not.toContain("seat_usage_limit");
+  });
+
+  it("drops the reset clause when the seat-limit reset instant does not parse", () => {
+    const presentation = presentSessionError(errorItem({
+      details: {
+        kind: "seat_usage_limit",
+        seatId: "seat-1",
+        "window": null,
+        resetAt: "garbage",
+      } as unknown as ErrorItem["details"],
+    }));
+
+    expect(presentation.description).toBe(
+      "This session's Claude.ai login hit its plan limit.",
+    );
+    expect(presentation.recoveryAction).toBe("relaunch_session");
+  });
+
   it("turns the bounded unavailable-model code into an actionable recovery", () => {
     const presentation = presentSessionError(errorItem({
       code: "provider_model_unavailable",

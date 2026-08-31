@@ -321,6 +321,7 @@ pub(super) async fn spawn_actor_with_real_child(agent_script: &str) -> RealChild
         workspace_path: PathBuf::from("/tmp/workspace"),
         mcp_servers: Vec::new(),
         prompts: SystemPromptAppends::default(),
+        serving_seat_id: None,
         event_sink,
         background_work_registry,
         resume_replay_filter: ResumeReplayFilter::disabled(),

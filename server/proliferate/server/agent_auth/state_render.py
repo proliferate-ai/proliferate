@@ -39,7 +39,9 @@ file lives at ``<anyharness home>/agent-auth/state.json`` (mode 0600):
 
 ``sources`` are the ENABLED rows only (disabled rows never leave the DB). A
 harness whose every enabled row is unsatisfiable keeps its entry with
-``sources: []`` — absent means native, present-but-empty fails closed. There is
+``sources: []`` — absent means native, present-but-empty fails closed — and
+carries ``unsatisfied_reason``, the plain words naming why (the frozen
+``UNSATISFIED_*`` vocabulary below; first-drop-wins). There is
 NO ``model_catalog``, NO ``slot``, and NO ``provider`` on the wire —
 ``provider_hint`` is a UI-only display field the renderer never emits.
 
@@ -95,8 +97,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
-    AGENT_API_KEY_KIND_AWS_BEDROCK,
-    AGENT_API_KEY_KIND_AZURE_OPENAI,
     AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS,
     AGENT_AUTH_SOURCE_API_KEY,
     AGENT_AUTH_SOURCE_GATEWAY,
@@ -108,12 +108,27 @@ from proliferate.constants.agent_gateway import (
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.agent_gateway import AgentAuthSelectionRecord
+from proliferate.server.agent_auth.provider_env import (
+    translate_provider_config_env as _translate_provider_config_env,
+)
 from proliferate.server.ai_gateway.budget import (
     get_gateway_enrollment_for_user,
     is_gateway_budget_available,
 )
 
 logger = logging.getLogger("proliferate.cloud.materialization")
+
+# The refusal vocabulary (agent_auth spec §2: "the refusal names the actual
+# reason"). A present-but-empty harness entry carries `unsatisfied_reason` —
+# the plain words the runtime's SourceUnsatisfied refusal shows a human, so
+# the strings ARE the contract (pinned by the contract fixture): change one
+# only by changing the fixture. First-drop-wins when several sources dropped;
+# a harness with any rendered source never carries a reason.
+UNSATISFIED_GATEWAY_NOT_READY = "managed model access isn't ready on this account yet"
+UNSATISFIED_GATEWAY_BUDGET = "the team is out of LLM credits"
+UNSATISFIED_KEY_REVOKED = "its API key was revoked or removed"
+UNSATISFIED_SEATS_GONE = "its Claude.ai login was removed or signed out"
+UNSATISFIED_UNSUPPORTED = "this provider configuration isn't supported for this agent"
 
 
 @dataclass(frozen=True)
@@ -148,6 +163,11 @@ class AgentAuthStateInputs:
     ``(id, decrypted token)``, **in vault order** (``created_at``) — the order
     a pool seat row expands in (spec §2's "seat selection shape"). A revoked
     seat is simply absent, so its source vanishes at the next render pass.
+
+    ``gateway_budget_available`` is the budget predicate's verdict when the
+    load pass consulted ``is_gateway_budget_available`` (``None`` when it was
+    never consulted): ``False`` is how the renderer knows a missing virtual
+    key means budget-withheld rather than an account that isn't ready.
     """
 
     user_id: UUID
@@ -160,6 +180,7 @@ class AgentAuthStateInputs:
     gateway_base_url: str | None
     harness_settings: Mapping[str, dict[str, object]]  # keyed by harness_kind
     seat_values: tuple[tuple[UUID, str], ...] = ()
+    gateway_budget_available: bool | None = None
 
 
 def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, object], str]:
@@ -188,6 +209,14 @@ def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, obj
     by_harness: dict[str, list[tuple[tuple[str, str], dict[str, object]]]] = {
         selection.harness_kind: [] for selection in inputs.selections
     }
+    # First drop reason per harness ("refusals name the actual why", spec §2):
+    # attached only when the entry ends up present-but-empty below.
+    drop_reasons: dict[str, str] = {}
+
+    def note_drop(harness_kind: str, reason: str | None) -> None:
+        if reason is not None:
+            drop_reasons.setdefault(harness_kind, reason)
+
     seen_seat_ids: dict[str, set[str]] = {}
     for selection in inputs.selections:
         # A seat selection is the one row that expands to MANY wire sources
@@ -199,15 +228,18 @@ def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, obj
         # and the dedupe keeps the pinned seat's token from rendering twice.
         if selection.source_kind == AGENT_AUTH_SOURCE_SEAT:
             seen = seen_seat_ids.setdefault(selection.harness_kind, set())
-            for seat_source in _render_seat_sources(inputs, selection):
+            seat_sources, seat_reason = _render_seat_sources(inputs, selection)
+            note_drop(selection.harness_kind, seat_reason)
+            for seat_source in seat_sources:
                 if (seat_id := str(seat_source["seat_id"])) not in seen:
                     seen.add(seat_id)
                     by_harness[selection.harness_kind].append(
                         ((str(seat_source["kind"]), ""), seat_source)
                     )
             continue
-        source = _render_source(inputs, selection)
+        source, reason = _render_source(inputs, selection)
         if source is None:
+            note_drop(selection.harness_kind, reason)
             continue
         sort_key = (str(source["kind"]), selection.env_var_name or "")
         by_harness[selection.harness_kind].append((sort_key, source))
@@ -215,10 +247,15 @@ def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, obj
     harnesses: list[dict[str, object]] = []
     for harness_kind in sorted(by_harness):
         ordered = sorted(by_harness[harness_kind], key=lambda item: item[0])
+        sources = [source for _, source in ordered]
         harness_entry: dict[str, object] = {
             "harness_kind": harness_kind,
-            "sources": [source for _, source in ordered],
+            "sources": sources,
         }
+        # Present-but-empty names its actual why; a harness with ANY rendered
+        # source never carries a reason (first-drop-wins across its drops).
+        if not sources and harness_kind in drop_reasons:
+            harness_entry["unsatisfied_reason"] = drop_reasons[harness_kind]
         harness_settings = inputs.harness_settings.get(harness_kind)
         if harness_settings:
             harness_entry["settings"] = harness_settings
@@ -241,7 +278,8 @@ def agent_auth_state_fingerprint(state: Mapping[str, object]) -> str:
 def _render_source(
     inputs: AgentAuthStateInputs,
     selection: AgentAuthSelectionRecord,
-) -> dict[str, object] | None:
+) -> tuple[dict[str, object] | None, str | None]:
+    """Render one non-seat selection: ``(source, None)`` or ``(None, reason)``."""
     if selection.source_kind == AGENT_AUTH_SOURCE_GATEWAY:
         return _render_gateway_source(inputs, selection)
     if selection.source_kind == AGENT_AUTH_SOURCE_API_KEY:
@@ -253,13 +291,15 @@ def _render_source(
         if selection.api_key_id in inputs.provider_config_values:
             return _render_provider_config_source(inputs, selection)
         return _render_api_key_source(inputs, selection)
-    return None
+    # An unknown source kind is validator-forbidden; defend with the nearest
+    # frozen words rather than an entry that refuses without a why.
+    return None, UNSATISFIED_UNSUPPORTED
 
 
 def _render_seat_sources(
     inputs: AgentAuthStateInputs,
     selection: AgentAuthSelectionRecord,
-) -> list[dict[str, object]]:
+) -> tuple[list[dict[str, object]], str | None]:
     """Expand one seat selection row into its wire sources (spec §2).
 
     ``api_key_id`` NULL is the pool: every active seat, in vault order — the
@@ -270,17 +310,22 @@ def _render_seat_sources(
     the harness's REAL env-var name (the runtime ``.set()``s exact keys) per
     the provider_config wire ruling. Seats are claude-only this slice (the
     validator enforces it); other harnesses' seat rows drop here too.
+
+    Returns ``(sources, reason)`` — the reason is set exactly when the
+    expansion came up empty, naming why in the frozen refusal vocabulary.
     """
     if selection.harness_kind not in AGENT_AUTH_SEAT_CAPABLE_HARNESS_KINDS:
         logger.warning(
             "Skipping seat source for harness without a seat recipe (harness=%s)",
             selection.harness_kind,
         )
-        return []
+        # Validator-forbidden state (seats are claude-only this slice); the
+        # nearest frozen words are the unsupported-combination row.
+        return [], UNSATISFIED_UNSUPPORTED
     seats = inputs.seat_values
     if selection.api_key_id is not None:
         seats = tuple(s for s in seats if s[0] == selection.api_key_id)
-    return [
+    sources: list[dict[str, object]] = [
         {
             "kind": AGENT_AUTH_SOURCE_SEAT,
             "env": {"CLAUDE_CODE_OAUTH_TOKEN": token},
@@ -288,20 +333,23 @@ def _render_seat_sources(
         }
         for seat_id, token in seats
     ]
+    return sources, None if sources else UNSATISFIED_SEATS_GONE
 
 
 def _render_gateway_source(
     inputs: AgentAuthStateInputs,
     selection: AgentAuthSelectionRecord,
-) -> dict[str, object] | None:
-    """Render a gateway source, or ``None`` if it cannot be satisfied.
+) -> tuple[dict[str, object] | None, str | None]:
+    """Render a gateway source, or ``(None, reason)`` if it cannot be satisfied.
 
     Resolves the harness's own access-group-scoped key from the per-harness
     map (model-gateway.md §Account model, R2) — never a single shared key.
     An unsatisfiable gateway source is dropped rather than raised so the rest
     of the state — including the removal of any now-revoked ``api_key``
     material — is still written; enrollment reaching ``synced`` re-triggers
-    materialization.
+    materialization. A drop distinguishes budget-withheld (the load pass
+    consulted the predicate and it said no) from account-not-ready
+    (enrollment absent/unsynced, no minted key, no public base URL).
     """
     if not inputs.gateway_base_url:
         # L7 (contract): a configured gateway selection that cannot be delivered
@@ -312,7 +360,7 @@ def _render_gateway_source(
             "is not configured (harness=%s)",
             selection.harness_kind,
         )
-        return None
+        return None, UNSATISFIED_GATEWAY_NOT_READY
     synced = inputs.enrollment_sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED
     virtual_key = inputs.gateway_virtual_keys.get(selection.harness_kind)
     has_minted_key = virtual_key is not None
@@ -324,36 +372,40 @@ def _render_gateway_source(
             inputs.enrollment_sync_status or "none",
             has_minted_key,
         )
-        return None
+        if inputs.gateway_budget_available is False:
+            return None, UNSATISFIED_GATEWAY_BUDGET
+        return None, UNSATISFIED_GATEWAY_NOT_READY
     return {
         "kind": AGENT_AUTH_SOURCE_GATEWAY,
         "base_url": inputs.gateway_base_url,
         "key": virtual_key,
-    }
+    }, None
 
 
 def _render_api_key_source(
     inputs: AgentAuthStateInputs,
     selection: AgentAuthSelectionRecord,
-) -> dict[str, object] | None:
+) -> tuple[dict[str, object] | None, str | None]:
     if selection.api_key_id is None or selection.env_var_name is None:
-        return None
+        # Malformed row (the write gate forbids it): the referenced material
+        # is unreachable, which reads the same as a removed key to the user.
+        return None, UNSATISFIED_KEY_REVOKED
     value = inputs.api_key_values.get(selection.api_key_id)
     if value is None:
         # Revoked (or vanished) key: drop the source so the raw key material
         # disappears from the sandbox at this pass. AnyHarness fails closed.
-        return None
+        return None, UNSATISFIED_KEY_REVOKED
     return {
         "kind": AGENT_AUTH_SOURCE_API_KEY,
         "env_var_name": selection.env_var_name,
         "value": value,
-    }
+    }, None
 
 
 def _render_provider_config_source(
     inputs: AgentAuthStateInputs,
     selection: AgentAuthSelectionRecord,
-) -> dict[str, object] | None:
+) -> tuple[dict[str, object] | None, str | None]:
     """Render a typed vault entry as a ``provider_config`` wire source.
 
     Per the wire-contract ruling (agent-auth.md's "Delivery: state.json",
@@ -364,18 +416,18 @@ def _render_provider_config_source(
     run (plain env-set vs. codex's config.toml injection), not to rename a
     field.
 
-    Returns ``None`` (dropping the source, never raising) for a
+    Returns ``(None, reason)`` (dropping the source, never raising) for a
     revoked/vanished vault entry or an unsupported (harness_kind, config_kind)
     combination -- same never-abort-the-reconcile contract as
     ``_render_api_key_source``/``_render_gateway_source``.
     """
     if selection.api_key_id is None:
-        return None
+        return None, UNSATISFIED_KEY_REVOKED
     resolved = inputs.provider_config_values.get(selection.api_key_id)
     if resolved is None:
         # Revoked (or vanished) typed entry: drop the source, same as a bare
         # api_key's revoked-key handling above.
-        return None
+        return None, UNSATISFIED_KEY_REVOKED
     config_kind, fields = resolved
     env = _translate_provider_config_env(selection.harness_kind, config_kind, fields)
     if env is None:
@@ -384,131 +436,12 @@ def _render_provider_config_source(
             selection.harness_kind,
             config_kind,
         )
-        return None
+        return None, UNSATISFIED_UNSUPPORTED
     return {
         "kind": AGENT_AUTH_SOURCE_PROVIDER_CONFIG,
         "config_kind": config_kind,
         "env": env,
-    }
-
-
-def _hostname_first_label(endpoint: str) -> str:
-    """The Azure resource name: the first label of ``endpoint``'s hostname.
-
-    Live-test-proven vocabulary (ledger 2026-07-26 opencode×azure entry):
-    ``https://proliferate-gw-aoai.openai.azure.com`` (or a bare
-    ``proliferate-gw-aoai.openai.azure.com``, or even a bare
-    ``proliferate-gw-aoai``) -> ``proliferate-gw-aoai``. Tolerates a scheme, a
-    path/query suffix, userinfo (``user@host``), a port, and a bare
-    hostname/resource-name value (no scheme at all) uniformly by stripping a
-    scheme if present, taking the host:port portion before any path,
-    dropping any userinfo before ``@`` and any port after ``:``, then
-    splitting on the first ``.``. D2's stored-vault ``endpoint`` field is
-    never expected to carry userinfo or a port in practice, but this
-    function's contract is "first label of the hostname", so it strips both
-    rather than silently folding them into the returned label.
-    """
-    value = endpoint.strip()
-    if "://" in value:
-        value = value.split("://", 1)[1]
-    value = value.split("/", 1)[0]
-    if "@" in value:
-        value = value.rsplit("@", 1)[1]
-    value = value.split(":", 1)[0]
-    return value.split(".", 1)[0]
-
-
-def _translate_provider_config_env(
-    harness_kind: str,
-    config_kind: str,
-    fields: Mapping[str, str],
-) -> dict[str, str] | None:
-    """Generic vault fields -> this harness's real env-var names.
-
-    Mirrors registry.json's ``providerConfig[].envVars`` vocabulary for
-    (harness_kind, config_kind) EXACTLY -- this table's output keys must be
-    the literal names D1 declared, or D3-rust's generic ``.set()`` loop
-    silently emits the wrong variable. Returns ``None`` for an unsupported or
-    pending combination so the caller drops the source (same as an
-    unsatisfiable gateway/api_key source -- never raises).
-
-    D3 brief §4.2's ruled table. One mapping — claude's ``azure_openai``
-    (Foundry) row — is explicitly flagged as an unverified judgment call
-    pending a Gate 4 live run (not a solved problem inherited from D1/D2):
-    its vault entry has no field distinct from "resource" or "auth token"
-    (see the brief's §0 contradiction writeup), so this row bundles two
-    judgment calls rather than one settled fact — (1) the resource name is
-    derived from `endpoint`'s hostname by analogy to opencode's
-    live-test-proven `AZURE_RESOURCE_NAME` rule below, applied here to
-    claude's `ANTHROPIC_FOUNDRY_RESOURCE` without its own live test, and
-    (2) `ANTHROPIC_FOUNDRY_AUTH_TOKEN` is left unset, treating it and
-    `ANTHROPIC_FOUNDRY_API_KEY` as alternatives (mirroring the existing
-    `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN` pair) rather than populating
-    both. Gate 4's live claude×azure_openai run is what settles both; each
-    is a one-line fix in the block below if the live run shows either
-    backwards.
-    """
-    if config_kind == AGENT_API_KEY_KIND_AWS_BEDROCK:
-        region = fields.get("region")
-        bearer_token = fields.get("bearerToken")
-        if not region or not bearer_token:
-            return None
-        if harness_kind == "claude":
-            return {
-                "CLAUDE_CODE_USE_BEDROCK": "1",
-                "AWS_BEARER_TOKEN_BEDROCK": bearer_token,
-                "AWS_REGION": region,
-            }
-        if harness_kind in ("codex", "opencode"):
-            return {
-                "AWS_BEARER_TOKEN_BEDROCK": bearer_token,
-                "AWS_REGION": region,
-            }
-        return None
-
-    if config_kind == AGENT_API_KEY_KIND_AZURE_OPENAI:
-        endpoint = fields.get("endpoint")
-        api_key = fields.get("apiKey")
-        if not endpoint or not api_key:
-            return None
-        if harness_kind == "claude":
-            # Foundry: 3 vault fields (endpoint/deployment/apiKey) -> 4 env
-            # vars. UNVERIFIED judgment call (brief §0/§4.2, §8 item 4): the
-            # resource name is derived from endpoint's hostname (same rule as
-            # opencode's proven AZURE_RESOURCE_NAME derivation below);
-            # ANTHROPIC_FOUNDRY_AUTH_TOKEN is left unset, treating it and
-            # ANTHROPIC_FOUNDRY_API_KEY as alternatives (mirrors the existing
-            # ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN pair). Gate 4's live
-            # claude×azure_openai run is what settles this; if it shows the
-            # mapping backwards, swap which field populates which var.
-            return {
-                "CLAUDE_CODE_USE_FOUNDRY": "1",
-                "ANTHROPIC_FOUNDRY_RESOURCE": _hostname_first_label(endpoint),
-                "ANTHROPIC_FOUNDRY_BASE_URL": endpoint,
-                "ANTHROPIC_FOUNDRY_API_KEY": api_key,
-            }
-        if harness_kind == "opencode":
-            # Live-test-proven (ledger 2026-07-26): AZURE_OPENAI_API_KEY is
-            # dead code in the pinned opencode binary; AZURE_API_KEY +
-            # AZURE_RESOURCE_NAME (bare resource name, derived from
-            # endpoint's hostname) is the working pair. `deployment` is
-            # deliberately NOT translated here -- it folds into a
-            # `--model azure/<id>` launch argument, which is outside
-            # state.json's env+files wire contract (brief §4.2/§8 item 3,
-            # open question -- flagged, not solved, by this arm).
-            return {
-                "AZURE_API_KEY": api_key,
-                "AZURE_RESOURCE_NAME": _hostname_first_label(endpoint),
-            }
-        # codex×azure_openai: structurally excluded (D1 marked it `pending`;
-        # `supported_provider_config_kinds` already excludes it from what a
-        # selection may reference), but defend here too rather than trust
-        # that gate alone -- a working codex arm needs config.toml
-        # model_providers injection (D3-rust, gated on its own Gate 4 cell),
-        # not a plain env map.
-        return None
-
-    return None
+    }, None
 
 
 async def build_agent_auth_state(
@@ -574,6 +507,7 @@ async def _load_state_inputs(
 
     enrollment_sync_status: str | None = None
     gateway_virtual_keys: dict[str, str] = {}
+    gateway_budget_available: bool | None = None
     gateway_harness_kinds = {
         selection.harness_kind
         for selection in enabled
@@ -595,8 +529,10 @@ async def _load_state_inputs(
                 # at all, so a lagging or failed key-disable cannot leak
                 # gateway access. The gateway source then renders
                 # unsatisfiable and is dropped; the runtime fails closed at
-                # launch.
-                if await is_gateway_budget_available(db, user_id):
+                # launch. The verdict rides the inputs so the renderer can
+                # name budget-withheld in the entry's unsatisfied_reason.
+                gateway_budget_available = await is_gateway_budget_available(db, user_id)
+                if gateway_budget_available:
                     for harness_kind in gateway_harness_kinds:
                         enrollment_key = await agent_gateway_store.get_active_enrollment_key(
                             db,
@@ -647,4 +583,5 @@ async def _load_state_inputs(
         gateway_base_url=settings.agent_gateway_litellm_public_base_url or None,
         harness_settings=harness_settings,
         seat_values=seat_values,
+        gateway_budget_available=gateway_budget_available,
     )

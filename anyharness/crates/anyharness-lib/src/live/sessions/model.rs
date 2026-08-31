@@ -136,6 +136,11 @@ pub struct SessionLaunch {
     pub mcp_servers: Vec<SessionMcpServer>,
     pub startup: SessionStartupStrategy,
     pub prompts: SystemPromptAppends,
+    /// The vault seat id the route-auth render actually serves this launch on
+    /// (never token material). `None` for every non-seat route. The actor
+    /// confirms it served on successful process spawn and uses it to gate
+    /// seat usage-limit classification.
+    pub serving_seat_id: Option<String>,
     /// Last persisted event seq. Owned by the manager: it re-reads this under
     /// the start/inject critical section before spawning the actor; caller
     /// values are overwritten.
@@ -371,6 +376,10 @@ pub struct ActorCapabilities {
     pub permission_advisor: Option<Arc<dyn PermissionAdvisor>>,
     /// Queues a deduplicated target re-observation after a live contradiction.
     pub launch_observation_invalidator: Option<Arc<dyn LaunchObservationInvalidator>>,
+    /// Seat rotation state (cooling + last-served). `Some` in the real app
+    /// wiring; `None` in suites that exercise no seat behavior. Every store
+    /// operation degrades on failure, so this handle can never brick a launch.
+    pub seat_cooling: Option<Arc<crate::domains::agents::seat_cooling::SeatCoolingStore>>,
 }
 
 /// Per-call powers: hooks and context that vary per session start.

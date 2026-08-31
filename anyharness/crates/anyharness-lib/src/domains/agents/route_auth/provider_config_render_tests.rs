@@ -361,6 +361,7 @@ fn codex_provider_config_azure_openai_arm_renders_the_expected_toml_when_invoked
     let profile = AgentRuntimeAuthProfile::Sources(HarnessSources {
         harness_kind: "codex".to_string(),
         revision: 3,
+        rotate: true,
         sources: vec![ResolvedSource::ProviderConfig(ProviderConfigProfile {
             config_kind: "azure_openai".to_string(),
             env: [
@@ -419,6 +420,7 @@ fn codex_provider_config_azure_openai_missing_endpoint_is_selection_incomplete()
     let profile = AgentRuntimeAuthProfile::Sources(HarnessSources {
         harness_kind: "codex".to_string(),
         revision: 1,
+        rotate: true,
         sources: vec![ResolvedSource::ProviderConfig(ProviderConfigProfile {
             config_kind: "azure_openai".to_string(),
             env: [("AZURE_OPENAI_API_KEY".to_string(), "azure-raw".to_string())]

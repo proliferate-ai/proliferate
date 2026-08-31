@@ -10,8 +10,25 @@ vi.mock("#product/hooks/sessions/workflows/use-session-model-fallback-action", (
   useSessionModelFallbackAction: () => vi.fn(),
 }));
 
+const createEmptySessionWithResolvedConfig = vi.hoisted(() =>
+  vi.fn().mockResolvedValue("new-session-1")
+);
+vi.mock("#product/hooks/sessions/workflows/use-session-creation-actions", () => ({
+  useSessionCreationActions: () => ({
+    createEmptySessionWithResolvedConfig,
+    createSessionWithResolvedConfig: vi.fn(),
+  }),
+}));
+
+const getSessionRecordMock = vi.hoisted(() => vi.fn());
+vi.mock("#product/stores/sessions/session-records", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getSessionRecord: getSessionRecordMock,
+}));
+
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
   useModelSupportStore.setState({ refusalsByKey: {}, pickerRequestNonce: 0 });
 });
 
@@ -41,6 +58,44 @@ describe("SessionErrorItem", () => {
     fireEvent.click(screen.getByRole("button", { name: "Choose model" }));
     expect(useModelSupportStore.getState().pickerRequestNonce).toBe(1);
     expect(useModelSupportStore.getState().refusalsByKey).toEqual({});
+  });
+
+  it("offers a one-click relaunch on a seat plan-limit death", () => {
+    getSessionRecordMock.mockReturnValue({
+      sessionId: "session-1",
+      agentKind: "claude",
+      modelId: "claude-opus-4-7",
+      requestedModelId: null,
+      workspaceId: "workspace-1",
+    });
+    render(
+      <SessionErrorItem
+        item={errorItem({
+          code: "seat_usage_limit",
+          message: "seat usage limit reached",
+          details: {
+            kind: "seat_usage_limit",
+            seatId: "seat-1",
+            window: "five_hour",
+            resetAt: "2026-01-05T18:00:00Z",
+          } as unknown as ErrorItem["details"],
+        })}
+        sessionId="session-1"
+      />,
+    );
+
+    expect(screen.getByText("Claude.ai plan limit reached")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Relaunch session/ }));
+
+    // The dead session's own parameters ride the ordinary create path; the
+    // next launch lands on the next login via the runtime's seat ladder.
+    expect(createEmptySessionWithResolvedConfig).toHaveBeenCalledTimes(1);
+    expect(createEmptySessionWithResolvedConfig).toHaveBeenCalledWith({
+      agentKind: "claude",
+      modelId: "claude-opus-4-7",
+      workspaceId: "workspace-1",
+    });
   });
 });
 

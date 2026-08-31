@@ -47,6 +47,7 @@ impl fmt::Debug for RenderedRouteAuth {
             .field("set", &RedactedEnv(&self.set))
             .field("remove", &self.remove)
             .field("files", &self.files)
+            .field("serving_seat_id", &self.serving_seat_id)
             .finish()
     }
 }

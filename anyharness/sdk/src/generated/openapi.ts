@@ -2247,6 +2247,11 @@ export interface components {
             satisfiable: boolean;
         };
         AgentAuthStateSummary: {
+            /**
+             * @description RFC3339 UTC; present ONLY when no seat can serve right now (all pool
+             *     seats cooling, or the rotate-off pinned candidate cooling).
+             */
+            coolingUntil?: string | null;
             display: components["schemas"]["AgentAuthDisplay"];
             /**
              * Format: int64
@@ -2256,6 +2261,17 @@ export interface components {
             evidenceRef?: null | components["schemas"]["AgentAuthEvidenceRef"];
             facts: components["schemas"]["AgentAuthFactsSummary"];
             nextAction: components["schemas"]["AgentAuthNextAction"];
+            /**
+             * @description The seat rotation would pick for the NEXT launch (rotate=false: the
+             *     pinned candidate). Absent when the pool has fewer than two seats.
+             */
+            nextSeatId?: string | null;
+            /**
+             * @description Seat rotation (claude seats): the seat currently serving — last served
+             *     if still in the applied pool, else the pool's first. Absent when the
+             *     applied document carries no seats.
+             */
+            servingSeatId?: string | null;
         };
         /**
          * @description The runtime's active agent catalog version and its provenance. Read-only:
@@ -3013,6 +3029,12 @@ export interface components {
             /** @enum {string} */
             kind: "network_connection";
             provider?: string | null;
+        } | {
+            /** @enum {string} */
+            kind: "seat_usage_limit";
+            resetAt: string;
+            seatId: string;
+            window: string;
         };
         ExportReplayRecordingRequest: {
             name?: string | null;

@@ -43,6 +43,11 @@ pub struct HarnessSources {
     /// names and GC stale ones.
     pub revision: i64,
     pub sources: Vec<ResolvedSource>,
+    /// The seat-rotation toggle, from the document's `settings["rotate"]`:
+    /// `true` when absent or not a bool (rotation is the default), `false`
+    /// only on an explicit `false`. Consumed by the launch seam's rotation
+    /// decision; meaningless (and ignored) for seatless profiles.
+    pub rotate: bool,
 }
 
 /// One resolved credential source (contract §3 `sources[]`).
@@ -174,23 +179,37 @@ pub fn resolve_profile(
         return Ok(AgentRuntimeAuthProfile::Native);
     };
     // Absent vs present-but-empty: `None` is native, `Some([])` fails closed.
-    let Some(raw_sources) = state.sources_for(harness_kind) else {
+    let Some(entry) = state
+        .harnesses
+        .iter()
+        .find(|entry| entry.harness_kind == harness_kind)
+    else {
         return Ok(AgentRuntimeAuthProfile::Native);
     };
-    if raw_sources.is_empty() {
+    if entry.sources.is_empty() {
         return Err(RouteAuthError::SelectionMissing {
             harness_kind: harness_kind.to_string(),
             revision: state.revision,
+            reason: clamp_unsatisfied_reason(entry.unsatisfied_reason.as_deref()),
         });
     }
-    let mut sources = Vec::with_capacity(raw_sources.len());
-    for source in raw_sources {
+    let mut sources = Vec::with_capacity(entry.sources.len());
+    for source in &entry.sources {
         sources.push(resolve_source(harness_kind, source)?);
     }
+    // `settings["rotate"]`: absent or non-bool → true (rotation is the
+    // default); only an explicit `false` pins the applied seat.
+    let rotate = entry
+        .settings
+        .as_ref()
+        .and_then(|settings| settings.get("rotate"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(true);
     Ok(AgentRuntimeAuthProfile::Sources(HarnessSources {
         harness_kind: harness_kind.to_string(),
         revision: state.revision,
         sources,
+        rotate,
     }))
 }
 
@@ -246,6 +265,47 @@ fn resolve_source(
             detail: format!("unknown agent-auth source kind '{unknown}'"),
         }),
     }
+}
+
+/// The longest `unsatisfied_reason` a refusal will speak verbatim. The
+/// server's vocabulary is a handful of short plain sentences (the longest is
+/// well under 100 chars); anything longer is not one of them.
+const MAX_UNSATISFIED_REASON_CHARS: usize = 200;
+
+/// A run of this many `[A-Za-z0-9_-]` characters reads as a token, not words.
+const TOKEN_RUN_CHARS: usize = 32;
+
+/// Clamp the document's `unsatisfied_reason` before it rides into
+/// [`RouteAuthError::SelectionMissing`], whose Display reaches tracing, the
+/// 409 body, and the UI copy. The document is server-authored, but this is
+/// the last hop before shipped logs, so the value is accepted only when it
+/// is short and word-shaped: at most [`MAX_UNSATISFIED_REASON_CHARS`], and
+/// neither containing `sk-` nor any [`TOKEN_RUN_CHARS`]-long token run.
+/// Anything else is treated as absent — the cause-family sentence stands.
+fn clamp_unsatisfied_reason(raw: Option<&str>) -> Option<String> {
+    let reason = raw.map(str::trim).filter(|reason| !reason.is_empty())?;
+    if reason.chars().count() > MAX_UNSATISFIED_REASON_CHARS || looks_token_shaped(reason) {
+        return None;
+    }
+    Some(reason.to_string())
+}
+
+fn looks_token_shaped(reason: &str) -> bool {
+    if reason.contains("sk-") {
+        return true;
+    }
+    let mut run = 0usize;
+    for ch in reason.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+            run += 1;
+            if run >= TOKEN_RUN_CHARS {
+                return true;
+            }
+        } else {
+            run = 0;
+        }
+    }
+    false
 }
 
 fn require_field(

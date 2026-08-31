@@ -458,7 +458,7 @@ async def test_enrollment_sync_completion_pokes_the_local_delivery_surface(
     )
 
     pre_state, _ = await build_agent_auth_state(db_session, user_id, surface="local")
-    assert pre_state["harnesses"] == [{"harness_kind": "claude", "sources": []}]
+    assert [(h["harness_kind"], h["sources"]) for h in pre_state["harnesses"]] == [("claude", [])]
     pre_revision = pre_state["revision"]
     assert isinstance(pre_revision, int) and pre_revision > 0
 

@@ -8148,6 +8148,13 @@
           "facts"
         ],
         "properties": {
+          "coolingUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "RFC3339 UTC; present ONLY when no seat can serve right now (all pool\nseats cooling, or the rotate-off pinned candidate cooling)."
+          },
           "display": {
             "$ref": "#/components/schemas/AgentAuthDisplay"
           },
@@ -8175,6 +8182,20 @@
           },
           "nextAction": {
             "$ref": "#/components/schemas/AgentAuthNextAction"
+          },
+          "nextSeatId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The seat rotation would pick for the NEXT launch (rotate=false: the\npinned candidate). Absent when the pool has fewer than two seats."
+          },
+          "servingSeatId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Seat rotation (claude seats): the seat currently serving — last served\nif still in the applied pool, else the pool's first. Absent when the\napplied document carries no seats."
           }
         }
       },
@@ -11173,6 +11194,33 @@
                   "string",
                   "null"
                 ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A seat (Claude.ai login) hit its usage limit mid-session. The client\nreads `kind == \"seat_usage_limit\"`; `seat_id` is the vault uuid (never\ntoken material), `window` is `\"five_hour\" | \"seven_day\"`, and\n`reset_at` is the cooling deadline as an RFC3339 UTC string.",
+            "required": [
+              "seatId",
+              "window",
+              "resetAt",
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "seat_usage_limit"
+                ]
+              },
+              "resetAt": {
+                "type": "string"
+              },
+              "seatId": {
+                "type": "string"
+              },
+              "window": {
+                "type": "string"
               }
             }
           }

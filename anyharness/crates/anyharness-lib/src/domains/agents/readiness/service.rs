@@ -249,6 +249,10 @@ fn apply_launch_route_upgrade(
         resolved.credential_state,
         CredentialState::Ready | CredentialState::ReadyViaLocalAuth
     );
+    // Deliberately the UNROTATED route-auth read: readiness asks "does a
+    // route provide credentials at all?", which no rotation pick changes —
+    // and a readiness sweep must never consult (let alone appear to advance)
+    // per-launch seat rotation state. Only the session-launch path rotates.
     if already_ready
         || !crate::domains::agents::route_auth::launch_route_provides_credentials(
             runtime_home,

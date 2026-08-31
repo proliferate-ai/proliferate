@@ -57,6 +57,39 @@ describe("planBatchedStreamSideEffects", () => {
     expect(noWorkspacePlan.invalidatePrStatus).toBe(false);
   });
 
+  it("plans one limit-hit report per seat_usage_limit error event, keyed by envelope identity", () => {
+    const plan = planBatchedStreamSideEffects({
+      ...baseInput(),
+      envelopes: [
+        envelope(2, {
+          type: "error",
+          message: "seat usage limit reached",
+          code: "seat_usage_limit",
+          details: {
+            kind: "seat_usage_limit",
+            seatId: "seat-1",
+            window: "five_hour",
+            resetAt: "2026-08-27T18:00:00Z",
+          },
+        } as unknown as SessionEventEnvelope["event"]),
+        // A plain error plans no report.
+        envelope(3, {
+          type: "error",
+          message: "something else failed",
+        } as unknown as SessionEventEnvelope["event"]),
+      ],
+    });
+
+    expect(plan.eventEffects).toEqual([{
+      kind: "report_seat_limit_hit",
+      sessionId: "session-1",
+      seq: 2,
+      seatId: "seat-1",
+      window: "five_hour",
+      resetAt: "2026-08-27T18:00:00Z",
+    }]);
+  });
+
   it("plans final rollback clearing when no queued config changes remain", () => {
     const plan = planBatchedStreamSideEffects({
       ...baseInput(),

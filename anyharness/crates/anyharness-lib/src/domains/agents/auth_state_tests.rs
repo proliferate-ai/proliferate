@@ -47,6 +47,7 @@ fn runtime_fold_upgrades_a_gateway_credential_on_a_green_trial() {
         probe: ProbeLifecycle::default(),
         trial: Some(Tier1TrialFact::Green { age_seconds: 12 }),
         gateway: None,
+        seat_rotation: SeatRotationReadout::default(),
     };
     let facts = facts_from_resolved_with_runtime(&resolved, &runtime);
 
@@ -71,6 +72,7 @@ fn a_green_trial_never_upgrades_a_non_gateway_credential() {
         probe: ProbeLifecycle::default(),
         trial: Some(Tier1TrialFact::Green { age_seconds: 5 }),
         gateway: None,
+        seat_rotation: SeatRotationReadout::default(),
     };
     let facts = facts_from_resolved_with_runtime(&resolved, &runtime);
 
@@ -95,6 +97,7 @@ fn runtime_fold_marks_expired_on_an_expired_trial() {
         probe: ProbeLifecycle::default(),
         trial: Some(Tier1TrialFact::Expired),
         gateway: None,
+        seat_rotation: SeatRotationReadout::default(),
     };
     let facts = facts_from_resolved_with_runtime(&resolved, &runtime);
     assert!(facts.expired);
@@ -116,6 +119,7 @@ fn runtime_fold_threads_the_real_probe_lifecycle() {
         },
         trial: None,
         gateway: None,
+        seat_rotation: SeatRotationReadout::default(),
     };
     let facts = facts_from_resolved_with_runtime(&resolved, &runtime);
     assert_eq!(facts.probe.phase, ProbePhase::Backoff);

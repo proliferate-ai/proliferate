@@ -1,6 +1,6 @@
 use super::access::map_access_error;
 use super::error::ApiError;
-use crate::domains::agents::route_auth::RouteAuthError;
+use crate::domains::agents::route_auth::{LaunchRefusal, RouteAuthError};
 use crate::domains::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
 use crate::domains::sessions::mcp_bindings::workspace_attachment::{
     WORKSPACE_MCP_ATTACHMENT_CODE, WORKSPACE_MCP_ATTACHMENT_DETAIL,
@@ -170,12 +170,25 @@ pub(super) fn map_create_session_error(error: CreateAndStartSessionError) -> Api
 /// Typed agent-auth launch refusals, keyed by the stable `AGENT_ROUTE_*` code
 /// (see `RouteAuthError::code`). Fail-closed / route-shape problems are 409s
 /// (the session request was fine; the launch precondition is not satisfied
-/// until a selection changes); state-file corruption and materialization IO
-/// are 500s.
+/// until a selection changes — or, for the cooling pair, until a seat's
+/// usage-limit reset passes); state-file corruption and materialization IO
+/// are 500s. EXHAUSTIVE on purpose: a new refusal variant must break compile
+/// here rather than fall into a default arm.
+///
+/// The refusal family — the variants a HUMAN reads — renders through the
+/// [`LaunchRefusal`] vocabulary (agent_auth spec §4): detail = `copy()`,
+/// code = `code()`, never a bare error string. The single launch-surface
+/// seam every HTTP mapper (sessions, cowork, agent-auth state) converges on.
 pub(super) fn map_route_auth_error(error: &RouteAuthError) -> ApiError {
     match error {
         RouteAuthError::SelectionMissing { .. }
-        | RouteAuthError::NoConfiguredSource { .. }
+        | RouteAuthError::SeatCooling { .. }
+        | RouteAuthError::AllSeatsCooling { .. } => {
+            let refusal = LaunchRefusal::from_route_auth_error(error)
+                .expect("refusal-family variants map onto the LaunchRefusal vocabulary");
+            ApiError::conflict(refusal.copy(), refusal.code())
+        }
+        RouteAuthError::NoConfiguredSource { .. }
         | RouteAuthError::SelectionIncomplete { .. }
         | RouteAuthError::UnsupportedRoute { .. }
         | RouteAuthError::UnknownHarness { .. }
@@ -483,28 +496,6 @@ mod tests {
         let error = super::map_pending_prompt_mutation_error(PendingPromptMutationError::Protected);
         assert_eq!(error.status(), StatusCode::CONFLICT);
         assert_eq!(error.code(), Some("PENDING_PROMPT_PROTECTED"));
-    }
-
-    /// An unsatisfiable agent-auth selection must reach the client as a typed
-    /// **409 naming the auth failure**, not the generic 400 "session create
-    /// failed" the readiness gate would produce. The distinction is the whole
-    /// point: 400 SESSION_CREATE_FAILED reads as "fix your request", while this
-    /// says "the route you selected is dead" — and only that lets the UI send the
-    /// user to the auth pane instead of to an install button.
-    #[test]
-    fn an_unsatisfiable_selection_maps_to_a_typed_conflict() {
-        use crate::domains::agents::route_auth::RouteAuthError;
-
-        let mapped = super::map_create_session_error(CreateAndStartSessionError::RouteAuth(
-            RouteAuthError::SelectionMissing {
-                harness_kind: "claude".to_string(),
-                revision: 42,
-            },
-        ));
-
-        assert_eq!(mapped.status(), StatusCode::CONFLICT);
-        assert_eq!(mapped.code(), Some("AGENT_ROUTE_SELECTION_MISSING"));
-        assert_eq!(mapped.into_response().status(), StatusCode::CONFLICT);
     }
 
     /// Exact unsupported launch values use the stable typed refusal.

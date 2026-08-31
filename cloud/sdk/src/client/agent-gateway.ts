@@ -14,6 +14,7 @@ import type {
   OrgAgentPolicy,
   OrgAgentPolicyViolationListResponse,
   PutAuthSelectionsRequest,
+  ReportSeatLimitHitRequest,
   UpdateOrgAgentPolicyRequest,
   UpsertAgentModelOverrideRequest,
 } from "../types/index.js";
@@ -123,6 +124,28 @@ export async function ackAgentAuthState(
     path: "/v1/cloud/agent-auth/state/ack",
     query: { surface },
     body: input,
+  });
+}
+
+// --- Seats -----------------------------------------------------------------
+
+/**
+ * Relay a runtime-observed seat limit hit (agent_auth spec §3 flow 5's hard
+ * signal). Fire-and-forget by design: cooling and the rotation decision are
+ * runtime-local and never wait on this report — the server only feeds the
+ * meters and the audit events (`agent_seat_limit_hit`, plus
+ * `agent_seat_rotated` when another active seat means rotation follows).
+ * 404 for a foreign, vanished, or non-seat key; 204 with no body on success.
+ */
+export async function reportSeatLimitHit(
+  keyId: string,
+  body: ReportSeatLimitHitRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<void> {
+  await client.requestJson<void>({
+    method: "POST",
+    path: `/v1/cloud/agent-auth/seats/${encodeURIComponent(keyId)}/limit-hit`,
+    body,
   });
 }
 

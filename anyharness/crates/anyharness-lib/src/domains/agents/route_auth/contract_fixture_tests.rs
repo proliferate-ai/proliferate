@@ -15,11 +15,20 @@ use super::*;
 // The module under test, reached through its public re-exports.
 use crate::domains::agents::route_auth::state::{AgentAuthState, SOURCE_KIND_GATEWAY};
 use crate::domains::agents::route_auth::{
-    profile::ResolvedSource, resolve_launch_route_auth_for_server, AgentRuntimeAuthProfile,
+    profile::ResolvedSource, resolve_launch_route_auth_rotated_for_server, AgentRuntimeAuthProfile,
 };
+use crate::domains::agents::seat_cooling::SeatCoolingStore;
+use crate::persistence::Db;
 
 const FIXTURE: &str =
     include_str!("../../../../../../../fixtures/contracts/agent-auth-state/v2.json");
+
+/// The sibling variant: v2.json with claude additionally carrying
+/// `"settings": {"rotate": false}` — the cross-language pin for the
+/// rotate-off launch semantics (the main fixture stays rotate-default so the
+/// other pins keep their round-robin meaning).
+const ROTATE_OFF_FIXTURE: &str =
+    include_str!("../../../../../../../fixtures/contracts/agent-auth-state/v2-rotate-off.json");
 
 fn fixture_state() -> AgentAuthState {
     serde_json::from_str(FIXTURE).expect("the contract fixture must parse as a v2 document")
@@ -76,27 +85,43 @@ fn every_gateway_source_carries_its_own_per_harness_key() {
     );
 }
 
-/// Contract point 1b (seats v1): claude's entry is one `seat` source — the
-/// wire shape `{kind, env: {CLAUDE_CODE_OAUTH_TOKEN}, seat_id}` the producer
-/// emits when a pool seat selection meets one active vault seat. The env map's
-/// key is ALREADY the harness's real env-var name (the provider_config
-/// ruling), and `seat_id` is the vault entry id, never token material.
+/// Contract point 1b (seats v1 + rotation): claude's entry is a THREE-seat
+/// pool — the wire shape `{kind, env: {CLAUDE_CODE_OAUTH_TOKEN}, seat_id}`
+/// per active vault seat, expanded in vault order. Every seat resolves, in
+/// document order (the order rotation treats as authoritative), each env map
+/// carrying exactly the one harness-real env var. `seat_id` is the vault
+/// entry id, never token material.
 #[test]
-fn the_fixtures_seat_source_resolves_to_a_seat_profile() {
+fn the_fixtures_seat_pool_resolves_all_three_seats_in_document_order() {
     let state = fixture_state();
 
     match resolve_profile(Some(&state), "claude").expect("resolve") {
-        AgentRuntimeAuthProfile::Sources(sources) => match &sources.sources[..] {
-            [ResolvedSource::Seat(seat)] => {
-                assert_eq!(seat.seat_id, "30000000-0000-4000-8000-000000000021");
-                assert_eq!(
-                    seat.env.keys().collect::<Vec<_>>(),
-                    ["CLAUDE_CODE_OAUTH_TOKEN"],
-                    "exactly the one harness-real env var"
-                );
-            }
-            other => panic!("claude should carry exactly one seat source, got {other:?}"),
-        },
+        AgentRuntimeAuthProfile::Sources(sources) => {
+            assert!(sources.rotate, "no rotate setting in the fixture → true");
+            let ids: Vec<&str> = sources
+                .sources
+                .iter()
+                .map(|source| match source {
+                    ResolvedSource::Seat(seat) => {
+                        assert_eq!(
+                            seat.env.keys().collect::<Vec<_>>(),
+                            ["CLAUDE_CODE_OAUTH_TOKEN"],
+                            "exactly the one harness-real env var"
+                        );
+                        seat.seat_id.as_str()
+                    }
+                    other => panic!("claude should carry only seat sources, got {other:?}"),
+                })
+                .collect();
+            assert_eq!(
+                ids,
+                [
+                    "30000000-0000-4000-8000-000000000021",
+                    "30000000-0000-4000-8000-000000000022",
+                    "30000000-0000-4000-8000-000000000023",
+                ]
+            );
+        }
         other => panic!("claude should be routed, got {other:?}"),
     }
 }
@@ -111,13 +136,22 @@ fn the_fixtures_seat_source_resolves_to_a_seat_profile() {
 fn the_fixtures_empty_entry_fails_closed_while_an_absent_one_is_native() {
     let state = fixture_state();
 
-    // Present with an empty list → refuse.
+    // Present with an empty list → refuse, carrying the producer's typed
+    // `unsatisfied_reason` into the refusal and its Display verbatim.
     assert_eq!(state.sources_for("grok").map(<[_]>::len), Some(0));
     let error = resolve_profile(Some(&state), "grok").expect_err("grok must fail closed");
     assert!(matches!(
         &error,
-        RouteAuthError::SelectionMissing { harness_kind, revision: 42 } if harness_kind == "grok"
+        RouteAuthError::SelectionMissing { harness_kind, revision: 42, reason: Some(reason) }
+            if harness_kind == "grok"
+                && reason == "managed model access isn't ready on this account yet"
     ));
+    assert_eq!(
+        error.to_string(),
+        "The auth method selected for grok can't be used right now — \
+         managed model access isn't ready on this account yet. \
+         Pick or fix a method in Settings → Agents."
+    );
 
     // Absent from the document → native.
     assert!(state.sources_for("opencode-zen").is_none());
@@ -146,8 +180,11 @@ fn the_fixtures_satisfiable_entries_resolve_to_the_documented_profiles() {
     match resolve_profile(Some(&state), "claude").expect("resolve") {
         AgentRuntimeAuthProfile::Sources(sources) => {
             assert_eq!(sources.revision, 42);
-            assert_eq!(sources.sources.len(), 1);
-            assert!(matches!(sources.sources[0], ResolvedSource::Seat(_)));
+            assert_eq!(sources.sources.len(), 3, "the three-seat pool");
+            assert!(sources
+                .sources
+                .iter()
+                .all(|source| matches!(source, ResolvedSource::Seat(_))));
         }
         other => panic!("claude should be routed, got {other:?}"),
     }
@@ -199,23 +236,32 @@ fn the_fixtures_satisfiable_entries_resolve_to_the_documented_profiles() {
 }
 
 /// The consumer reads the fixture through the REAL file path, not just serde:
-/// written to a runtime home, `resolve_launch_route_auth` renders claude's
-/// seat recipe from it. A fixture that parses but cannot drive a launch would
-/// otherwise pass the tests above.
+/// written to a runtime home, the rotated launch entry renders claude's seat
+/// recipe from it — serving seatAA (the pool's first, nothing cooling, no
+/// last-served) — with the serving-seat channel set. A fixture that parses
+/// but cannot drive a launch would otherwise pass the tests above.
 #[test]
 fn the_contract_fixture_drives_a_real_launch_render() {
     let home = TempHome::new("contract-fixture");
     home.write_state_raw(FIXTURE.as_bytes());
+    let store = SeatCoolingStore::new(Db::open_in_memory().expect("open in-memory db"));
 
-    let rendered = resolve_launch_route_auth_for_server(
+    let rendered = resolve_launch_route_auth_rotated_for_server(
         home.path(),
         "claude",
         &HarnessPlanResolver,
+        &store,
         // The fixture is stamped with an origin, so the guard must be given the
         // matching one or the document reads as absent.
         Some("https://api.proliferate.example"),
     )
     .expect("the fixture must render a claude launch");
+
+    assert_eq!(
+        rendered.serving_seat_id.as_deref(),
+        Some("30000000-0000-4000-8000-000000000021"),
+        "seatAA — first in document order — serves absent cooling"
+    );
 
     assert_eq!(
         rendered
@@ -244,4 +290,75 @@ fn the_contract_fixture_drives_a_real_launch_render() {
             "missing removal of {key}"
         );
     }
+}
+
+const SEAT_BB: &str = "30000000-0000-4000-8000-000000000022";
+const SEAT_CC: &str = "30000000-0000-4000-8000-000000000023";
+
+/// The rotate-off variant is v2.json plus EXACTLY claude's
+/// `settings.rotate=false` — nothing else may drift between the siblings, or
+/// the variant stops pinning what it claims to pin.
+#[test]
+fn the_rotate_off_variant_differs_from_v2_only_by_claudes_rotate_setting() {
+    let mut variant: serde_json::Value =
+        serde_json::from_str(ROTATE_OFF_FIXTURE).expect("variant parses");
+    let base: serde_json::Value = serde_json::from_str(FIXTURE).expect("v2 parses");
+
+    let claude = variant["harnesses"]
+        .as_array_mut()
+        .expect("harnesses")
+        .iter_mut()
+        .find(|entry| entry["harness_kind"] == "claude")
+        .expect("claude entry");
+    let settings = claude
+        .as_object_mut()
+        .expect("entry object")
+        .remove("settings")
+        .expect("the variant's claude entry carries settings");
+    assert_eq!(settings, serde_json::json!({ "rotate": false }));
+    assert_eq!(variant, base, "no other byte of the fixture may differ");
+}
+
+/// The cross-language rotate-off pin, launch-side: the variant resolves to
+/// `rotate == false`, and with `last_served = seatBB` the launch serves
+/// seatBB again (the pin), where the rotate-default v2.json round-robins on
+/// to seatCC from the same last-served fact.
+#[test]
+fn the_rotate_off_fixture_pins_the_served_seat_where_v2_round_robins() {
+    let rotate_off: AgentAuthState =
+        serde_json::from_str(ROTATE_OFF_FIXTURE).expect("variant parses as a v2 document");
+    match resolve_profile(Some(&rotate_off), "claude").expect("resolve") {
+        AgentRuntimeAuthProfile::Sources(sources) => {
+            assert!(!sources.rotate, "the variant's claude entry is rotate-off");
+        }
+        other => panic!("claude should be routed, got {other:?}"),
+    }
+
+    let now_epoch_s = chrono::Utc::now().timestamp();
+    let serving_after = |name: &str, fixture: &str| {
+        let home = TempHome::new(name);
+        home.write_state_raw(fixture.as_bytes());
+        let store = SeatCoolingStore::new(Db::open_in_memory().expect("open in-memory db"));
+        store.confirm_served("claude", SEAT_BB, now_epoch_s);
+        resolve_launch_route_auth_rotated_for_server(
+            home.path(),
+            "claude",
+            &HarnessPlanResolver,
+            &store,
+            Some("https://api.proliferate.example"),
+        )
+        .expect("the fixture must render a claude launch")
+        .serving_seat_id
+    };
+
+    assert_eq!(
+        serving_after("contract-fixture-rotate-off", ROTATE_OFF_FIXTURE).as_deref(),
+        Some(SEAT_BB),
+        "rotate-off pins the last-served seat"
+    );
+    assert_eq!(
+        serving_after("contract-fixture-rotate-default", FIXTURE).as_deref(),
+        Some(SEAT_CC),
+        "rotate absent → true: the pool round-robins past the last-served seat"
+    );
 }

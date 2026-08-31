@@ -20,6 +20,10 @@ export type AgentAuthStateSource = Schema<"AgentAuthStateSource">;
 export type AckAgentAuthStateRequest = Schema<"AgentAuthStateAckRequest">;
 export type AgentAuthDeliveryAck = Schema<"AgentAuthDeliveryAckResponse">;
 
+// The courier's limit-hit relay body (agent_auth spec §4, POST
+// /seats/{key_id}/limit-hit), derived from the regenerated OpenAPI schema.
+export type ReportSeatLimitHitRequest = Schema<"AgentSeatLimitHitRequest">;
+
 export type AgentGatewayCapabilities = Schema<"AgentGatewayCapabilitiesResponse">;
 export type AgentGatewayEnrollment = Schema<"AgentGatewayEnrollmentResponse">;
 

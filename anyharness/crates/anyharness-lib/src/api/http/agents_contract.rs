@@ -295,6 +295,9 @@ fn to_auth_state_summary(
         evidence_ref: derived.evidence_ref.map(auth_evidence_ref_to_contract),
         evidence_age_seconds: derived.evidence_age_seconds,
         facts: auth_facts_to_contract(&facts),
+        serving_seat_id: auth_runtime.seat_rotation.serving_seat_id.clone(),
+        next_seat_id: auth_runtime.seat_rotation.next_seat_id.clone(),
+        cooling_until: auth_runtime.seat_rotation.cooling_until.clone(),
     }
 }
 

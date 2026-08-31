@@ -170,13 +170,14 @@ fn applied_harness_kinds(document: &AgentAuthState) -> Vec<String> {
         .collect()
 }
 
+/// State-route mapping: ONE mapper with the sessions API
+/// (`sessions_errors::map_route_auth_error`, exhaustive, refusal family
+/// rendered through the `LaunchRefusal` vocabulary). Only
+/// `StaleStateRevision` can actually arise from
+/// `apply_state_file`/`clear_state_file`; delegating rather than mirroring
+/// is what makes "the two mappers can never disagree" structural.
 fn map_route_auth_error(error: RouteAuthError) -> ApiError {
-    match error {
-        RouteAuthError::StaleStateRevision { .. } => {
-            ApiError::conflict(error.to_string(), error.code())
-        }
-        _ => ApiError::internal(error.to_string()),
-    }
+    super::sessions_errors::map_route_auth_error(&error)
 }
 
 #[cfg(test)]

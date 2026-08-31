@@ -795,6 +795,16 @@ pub enum ErrorEventDetails {
         #[serde(skip_serializing_if = "Option::is_none")]
         provider: Option<String>,
     },
+    /// A seat (Claude.ai login) hit its usage limit mid-session. The client
+    /// reads `kind == "seat_usage_limit"`; `seat_id` is the vault uuid (never
+    /// token material), `window` is `"five_hour" | "seven_day"`, and
+    /// `reset_at` is the cooling deadline as an RFC3339 UTC string.
+    #[serde(rename_all = "camelCase")]
+    SeatUsageLimit {
+        seat_id: String,
+        window: String,
+        reset_at: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

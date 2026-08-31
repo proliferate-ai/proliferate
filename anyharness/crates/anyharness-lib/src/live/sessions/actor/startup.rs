@@ -76,6 +76,18 @@ impl SessionActor {
             &source_agent_kind,
             &ready_tx,
         )?;
+        // The post-spawn-success point: the harness process exists and is
+        // handed to this actor, so the seat that served THIS launch is now a
+        // fact — record it (rotation's `last_served` advances here and ONLY
+        // here, never at render/preview time). Unconditional for any seat
+        // launch: with rotate=false the confirmed seat is the pinned
+        // candidate, which keeps "applied" truthful.
+        if let (Some(seat_id), Some(store)) = (
+            config.launch.serving_seat_id.as_ref(),
+            config.caps.seat_cooling.as_ref(),
+        ) {
+            store.confirm_served(&source_agent_kind, seat_id, chrono::Utc::now().timestamp());
+        }
         let mut child = spawned.child;
         let stdin = spawned.stdin;
         let stdout = spawned.stdout;
@@ -464,6 +476,7 @@ impl SessionActor {
             workspace_path: launch.workspace_path,
             mcp_servers: launch.mcp_servers,
             prompts: launch.prompts,
+            serving_seat_id: launch.serving_seat_id,
             event_sink,
             background_work_registry,
             resume_replay_filter,

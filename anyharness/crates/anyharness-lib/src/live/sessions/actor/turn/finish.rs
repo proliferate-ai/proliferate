@@ -5,7 +5,8 @@ use tokio::sync::mpsc;
 use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::integrations::acp::provider_errors::{
     classify_network_connection_error, classify_provider_model_error,
-    classify_provider_rate_limit_error, NETWORK_CONNECTION_CODE, PROVIDER_RATE_LIMIT_CODE,
+    classify_provider_rate_limit_error, classify_seat_usage_limit_error, NETWORK_CONNECTION_CODE,
+    PROVIDER_RATE_LIMIT_CODE, SEAT_USAGE_LIMIT_CODE,
 };
 use crate::live::sessions::actor::config::queue::apply_pending_config_changes_if_idle;
 use crate::live::sessions::actor::state::SessionActor;
@@ -285,9 +286,22 @@ impl SessionActor {
                 // classification by value and preserves the raw cause.
                 let provider_model_code = classify_provider_model_error(&self.agent_kind, &e);
                 let error_message = e.to_string();
-                let (error_details, error_code) = if let Some(details) =
-                    classify_provider_rate_limit_error(&error_message)
+                // Seat usage-limit classification runs FIRST, gated on this
+                // session actually running on a recorded serving seat — a
+                // limit error on a non-seat route must never produce seat
+                // events or cooling.
+                let seat_usage_limit = self.serving_seat_id.as_ref().and_then(|seat_id| {
+                    classify_seat_usage_limit_error(&error_message)
+                        .map(|observation| (seat_id.clone(), observation))
+                });
+                let (error_details, error_code) = if let Some((seat_id, observation)) =
+                    seat_usage_limit
                 {
+                    (
+                        Some(self.observe_seat_usage_limit(seat_id, observation)),
+                        Some(SEAT_USAGE_LIMIT_CODE.to_string()),
+                    )
+                } else if let Some(details) = classify_provider_rate_limit_error(&error_message) {
                     (Some(details), Some(PROVIDER_RATE_LIMIT_CODE.to_string()))
                 } else if let Some(code) = provider_model_code {
                     (None, Some(code.to_string()))
@@ -361,6 +375,60 @@ impl SessionActor {
                 }
                 true
             }
+        }
+    }
+
+    /// A classified seat usage-limit error: mark the serving seat cooling
+    /// (locally — never a network call) and build the typed turn-error
+    /// details. The cooling deadline is the reset the error carried, else the
+    /// top of the next 5-hour window (`seat_cooling::next_five_hour_window_top`),
+    /// clamped to one week (`seat_cooling::clamp_cooling_deadline`) so the
+    /// reported `reset_at` matches what the store can actually hold.
+    /// `seat_id` is the vault uuid — never the token.
+    fn observe_seat_usage_limit(
+        &self,
+        seat_id: String,
+        observation: crate::integrations::acp::provider_errors::SeatUsageLimitObservation,
+    ) -> anyharness_contract::v1::ErrorEventDetails {
+        use crate::domains::agents::seat_cooling::{
+            clamp_cooling_deadline, next_five_hour_window_top,
+        };
+        let now_epoch_s = chrono::Utc::now().timestamp();
+        let cooling_until_epoch_s = clamp_cooling_deadline(
+            now_epoch_s,
+            observation
+                .reset_at_epoch_s
+                .unwrap_or_else(|| next_five_hour_window_top(now_epoch_s)),
+        );
+        if let Some(store) = self.caps.seat_cooling.as_ref() {
+            store.mark_cooling(
+                &seat_id,
+                &self.agent_kind,
+                cooling_until_epoch_s,
+                Some(observation.window),
+                now_epoch_s,
+            );
+        } else {
+            tracing::warn!(
+                session_id = %self.session_id,
+                seat_id = %seat_id,
+                "seat usage limit observed but no seat-cooling store is wired; not marking cooling"
+            );
+        }
+        tracing::warn!(
+            session_id = %self.session_id,
+            seat_id = %seat_id,
+            window = observation.window,
+            cooling_until_epoch_s,
+            "seat usage limit observed; seat marked cooling"
+        );
+        let reset_at = chrono::DateTime::from_timestamp(cooling_until_epoch_s, 0)
+            .map(|at| at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+            .unwrap_or_default();
+        anyharness_contract::v1::ErrorEventDetails::SeatUsageLimit {
+            seat_id,
+            window: observation.window.to_string(),
+            reset_at,
         }
     }
 }

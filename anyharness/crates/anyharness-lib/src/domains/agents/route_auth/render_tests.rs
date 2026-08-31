@@ -376,7 +376,7 @@ fn empty_sources_refuse_the_launch_instead_of_rendering_native() {
 
     assert!(matches!(
         &error,
-        RouteAuthError::SelectionMissing { harness_kind, revision: 4 } if harness_kind == "claude"
+        RouteAuthError::SelectionMissing { harness_kind, revision: 4, .. } if harness_kind == "claude"
     ));
     // Nothing was materialized on the way to the refusal.
     assert!(!home.path().join("agent-auth/claude-config").exists());

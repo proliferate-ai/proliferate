@@ -122,6 +122,7 @@ fn round_trip_serde_preserves_sources() {
                 harness_kind: "claude".into(),
                 sources: vec![gateway_source("https://llm.proliferate.ai", "sk-vk")],
                 settings: None,
+                unsatisfied_reason: None,
             },
             HarnessAuth {
                 harness_kind: "opencode".into(),
@@ -130,6 +131,7 @@ fn round_trip_serde_preserves_sources() {
                     api_key_source("ANTHROPIC_API_KEY", "sk-ant"),
                 ],
                 settings: None,
+                unsatisfied_reason: None,
             },
         ],
     };
@@ -156,6 +158,7 @@ fn sources_lookup_distinguishes_absent_from_present_but_empty() {
                 harness_kind: "codex".into(),
                 sources: vec![api_key_source("OPENAI_API_KEY", "sk-raw")],
                 settings: None,
+                unsatisfied_reason: None,
             },
             // A selected harness whose every source was dropped as
             // unsatisfiable: the renderer keeps the entry, empty.
@@ -163,6 +166,7 @@ fn sources_lookup_distinguishes_absent_from_present_but_empty() {
                 harness_kind: "opencode".into(),
                 sources: vec![],
                 settings: None,
+                unsatisfied_reason: None,
             },
         ],
     };
@@ -258,6 +262,7 @@ fn state_with_revision(revision: i64) -> AgentAuthState {
             harness_kind: "claude".into(),
             sources: vec![api_key_source("ANTHROPIC_API_KEY", "sk-raw")],
             settings: None,
+            unsatisfied_reason: None,
         }],
     }
 }

@@ -17,12 +17,7 @@ type CapabilitiesData = {
   enrollmentStatus: string;
 };
 
-type LocalAgent = {
-  kind: string;
-  displayName: string;
-  readiness: string;
-  supportsLogin: boolean;
-};
+type LocalAgent = { kind: string; displayName: string; readiness: string; supportsLogin: boolean };
 
 const state = vi.hoisted(() => ({
   cloudActive: true,
@@ -118,6 +113,8 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useAgentApiKeys: () => state.apiKeys,
   useAgentModels: () => state.agentModels,
   useAgentAuthState: () => ({ data: undefined, isLoading: false }),
+  // The settings rider (rotate toggle): an empty map reads as rotate=true.
+  useAgentAuthHarnessSettings: () => ({ data: {}, isLoading: false }),
   useOrgAgentPolicy: () => ({ data: undefined, isLoading: false }),
   usePutAuthSelections: () => ({ mutate: putMutate, isPending: false }),
   useCreateAgentApiKey: () => ({ mutate: createKeyMutate, isPending: false }),

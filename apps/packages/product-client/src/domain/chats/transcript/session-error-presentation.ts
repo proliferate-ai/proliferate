@@ -1,11 +1,15 @@
 import type { ErrorItem } from "@anyharness/sdk";
+import {
+  formatSeatResetTime,
+  readSeatUsageLimitDetails,
+} from "./seat-usage-limit";
 
 export interface SessionErrorPresentation {
   title: string;
   description: string;
   technicalDetail: string | null;
   fallbackModelLabel: string | null;
-  recoveryAction: "choose_model" | null;
+  recoveryAction: "choose_model" | "relaunch_session" | null;
 }
 
 const GENERIC_ERROR_TITLE = "Chat stopped";
@@ -48,6 +52,24 @@ export function presentSessionError(item: ErrorItem): SessionErrorPresentation {
       technicalDetail: technicalMessage,
       fallbackModelLabel,
       recoveryAction: null,
+    };
+  }
+
+  // Seat plan limit (agent_auth flow 5). Plain words, never the runtime
+  // code. The body promises nothing about the NEXT session: whether it
+  // rotates onto another login is the runtime's decision under the rotate
+  // setting (rotate=false waits for this login's reset), so a sentence about
+  // it would be false half the time. The relaunch recovery is the offer.
+  const seatLimit = readSeatUsageLimitDetails(item.details);
+  if (seatLimit) {
+    const resetTime = formatSeatResetTime(seatLimit.resetAt);
+    const resetClause = resetTime === null ? "" : ` It resets at ${resetTime}.`;
+    return {
+      title: "Claude.ai plan limit reached",
+      description: `This session's Claude.ai login hit its plan limit.${resetClause}`,
+      technicalDetail: technicalMessage,
+      fallbackModelLabel: null,
+      recoveryAction: "relaunch_session",
     };
   }
 

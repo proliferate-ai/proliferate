@@ -420,6 +420,25 @@ pub struct AuthRuntimeInputs {
     /// gateway-health check has an observation for this harness. Folded onto the
     /// facts only for a gateway-sourced credential.
     pub gateway: Option<GatewayHealth>,
+    /// Seat rotation read-path facts (serving/next/cooling), computed by
+    /// `route_auth::seat_rotation_readout` from the applied document + the
+    /// seat-cooling store. Defaults to all-`None` (no seats).
+    pub seat_rotation: SeatRotationReadout,
+}
+
+/// The pane-facing seat rotation derivation (agent_auth spec §4 cell 2's
+/// serving-now / next-up tags + the cooling banner). Plain data; the frozen
+/// semantics live on `route_auth::seat_rotation_readout`, its one producer.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SeatRotationReadout {
+    /// The seat currently considered serving (last served if still in the
+    /// applied pool, else the pool's first). `None` when the doc has no seats.
+    pub serving_seat_id: Option<String>,
+    /// The seat rotation would pick for the NEXT launch. `None` when the pool
+    /// has fewer than two seats, or when no seat could serve.
+    pub next_seat_id: Option<String>,
+    /// RFC3339 UTC deadline, non-`None` ONLY when no seat can serve right now.
+    pub cooling_until: Option<String>,
 }
 
 /// Build [`AgentAuthFacts`] from a resolved agent, using ONLY the data the
