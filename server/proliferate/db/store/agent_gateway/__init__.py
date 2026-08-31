@@ -8,6 +8,8 @@ from proliferate.db.store.agent_gateway.api_keys import (
     get_agent_api_key_decrypted,
     get_agent_provider_config_decrypted,
     get_agent_seat_decrypted,
+    get_agent_seat_decrypted_for_probe,
+    list_active_agent_seats,
     list_agent_api_keys,
     list_agent_seats_decrypted,
     revoke_agent_api_key,
@@ -79,6 +81,12 @@ from proliferate.db.store.agent_gateway.records import (
     LlmCreditGrantRecord,
     OrgAgentPolicyRecord,
 )
+
+# Deliberately NOT re-exported here: the seat_usage store and its record
+# (advisory-only, agent_auth spec flow 5). The launch/render path imports
+# this package as `agent_gateway_store`; keeping the sample surface out of
+# the package namespace means that alias can never reach it. Importers go to
+# `.seat_usage` / `.records` directly and are pinned by the import-scan test.
 from proliferate.db.store.agent_gateway.selections import (
     AgentApiKeyNotUsableError,
     AgentProviderConfigNotSupportedError,
@@ -128,6 +136,7 @@ __all__ = [
     "get_agent_api_key_decrypted",
     "get_agent_provider_config_decrypted",
     "get_agent_seat_decrypted",
+    "get_agent_seat_decrypted_for_probe",
     "get_delivery_ack",
     "get_enrollment_by_id",
     "get_enrollment_by_virtual_key_id",
@@ -144,6 +153,7 @@ __all__ = [
     "list_active_enrollment_keys",
     "list_all_active_enrollment_keys",
     "record_enrollment_key_verification",
+    "list_active_agent_seats",
     "list_active_enrollments_for_subject",
     "list_active_org_enrollments_with_zero_grants",
     "list_active_personal_enrollments",

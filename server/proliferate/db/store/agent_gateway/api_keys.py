@@ -225,6 +225,63 @@ async def get_agent_seat_decrypted(
     )
 
 
+async def list_active_agent_seats(
+    db: AsyncSession,
+) -> list[AgentApiKeyRecord]:
+    """Every ACTIVE seat across ALL users, vault order — the usage-probe roster.
+
+    Records only, no decryption: flow 5's probe loop lists the roster cheaply
+    every tick and decrypts only the seats actually due for a probe (via
+    ``get_agent_seat_decrypted_for_probe``). Revoked seats are absent, which
+    is what "off for revoked seats" means mechanically.
+    """
+    rows = (
+        (
+            await db.execute(
+                select(AgentApiKey)
+                .where(
+                    AgentApiKey.status == AGENT_API_KEY_STATUS_ACTIVE,
+                    AgentApiKey.kind == AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION,
+                )
+                .order_by(AgentApiKey.created_at, AgentApiKey.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [api_key_record(row) for row in rows]
+
+
+async def get_agent_seat_decrypted_for_probe(
+    db: AsyncSession,
+    *,
+    api_key_id: UUID,
+) -> tuple[AgentApiKeyRecord, str] | None:
+    """Decrypt one active seat WITHOUT a user scope — the usage probe's fetch.
+
+    The third sanctioned decryption site (agent_auth spec §2's vault comment:
+    the renderer, the authed ``GET /state``, and the seat usage probe). Only
+    the server-internal probe loop and the authed pane-open poke call it; the
+    decrypted token exists in memory for the one-token request only and never
+    reaches samples, logs, or errors. Kind- and status-scoped, so a revoked or
+    non-seat row resolves to nothing and the caller skips.
+    """
+    row = (
+        await db.execute(
+            select(AgentApiKey).where(
+                AgentApiKey.id == api_key_id,
+                AgentApiKey.status == AGENT_API_KEY_STATUS_ACTIVE,
+                AgentApiKey.kind == AGENT_API_KEY_KIND_ANTHROPIC_SUBSCRIPTION,
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    return api_key_record(row), decrypt_text(
+        row.value_ciphertext, secret=settings.cloud_secret_key
+    )
+
+
 async def list_agent_seats_decrypted(
     db: AsyncSession,
     *,

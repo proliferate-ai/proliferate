@@ -326,6 +326,13 @@ class Settings(BaseSettings):
     # gate) or "pro" (org needs a healthy paid cloud subscription or an
     # active unlimited-cloud entitlement). Reading is never plan-gated.
     agent_gateway_policy_min_plan: str = "pro"
+    # Seat usage-probe cadence (agent_auth spec §3 flow 5, slice 4 meters),
+    # seconds. Active — a session visibly consuming the seat (rising
+    # utilization between samples) — probes every 5 minutes; idle seats every
+    # 30. Names are the spec's own; the probe worker gates only on
+    # run_background_workers (seats have no gateway dependency).
+    agent_seat_usage_probe_active_interval: float = 300.0
+    agent_seat_usage_probe_idle_interval: float = 1800.0
     e2b_api_key: str = ""
     e2b_template_name: str = ""
     e2b_webhook_signature_secret: str = ""

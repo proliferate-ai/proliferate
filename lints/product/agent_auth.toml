@@ -11,15 +11,16 @@ owner = "product"
 status = "law"
 enforced_by = "scripts/check_agent_auth_secret_logs.py"
 mode = "lint"
-scope = "server/proliferate/server/agent_auth/**, server/proliferate/server/ai_gateway/**, server/proliferate/db/store/agent_gateway/**, server/proliferate/db/models/agent_gateway.py, server/proliferate/db/models/cloud/**, server/proliferate/lib/infra/encryption/**, anyharness/crates/anyharness-lib/src/domains/agents/route_auth/**, anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/**"
+scope = "server/proliferate/server/agent_auth/**, server/proliferate/server/ai_gateway/**, server/proliferate/db/store/agent_gateway/**, server/proliferate/db/models/agent_gateway.py, server/proliferate/db/models/cloud/**, server/proliferate/lib/infra/encryption/**, server/proliferate/integrations/anthropic.py, anyharness/crates/anyharness-lib/src/domains/agents/route_auth/**, anyharness/crates/anyharness-lib/src/domains/agents/model_snapshot/**"
 
 rule = """A structured-log or tracing call in the agent-auth surfaces must not
 contain a live secret identifier. Three shapes are banned: the provider env-var
 secret names (PROLIFERATE_GATEWAY_KEY, ANTHROPIC_AUTH_TOKEN, XAI_API_KEY,
 CURSOR_API_KEY, OPENAI_API_KEY); the raw secret bindings `virtual_key`,
-`value_ciphertext`, and `api_key`; and attribute access of a secret field —
-`<receiver>.key`, `.token`, or `.api_key` — which is how the minted key actually
-flows (`minted.key`)."""
+`value_ciphertext`, `api_key`, and the seat usage probe's `seat_token` /
+`oauth_token`; and attribute access of a secret field — `<receiver>.key`,
+`.token`, or `.api_key` — which is how the minted key actually flows
+(`minted.key`)."""
 alternative = """Log the opaque handle (`virtual_key_id`, `.token_id`), a
 redacted hint, or a boolean presence flag instead of the secret. A reviewed
 redaction site that must name the binding carries an inline

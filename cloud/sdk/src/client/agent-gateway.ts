@@ -14,6 +14,7 @@ import type {
   OrgAgentPolicy,
   OrgAgentPolicyViolationListResponse,
   PutAuthSelectionsRequest,
+  SeatUsageSample,
   UpdateOrgAgentPolicyRequest,
   UpsertAgentModelOverrideRequest,
 } from "../types/index.js";
@@ -123,6 +124,32 @@ export async function ackAgentAuthState(
     path: "/v1/cloud/agent-auth/state/ack",
     query: { surface },
     body: input,
+  });
+}
+
+// --- Seat usage (flow 5's soft signal — the meters; slice 4) ---------------
+
+/** Latest usage-probe sample per active seat, vault order. Advisory only. */
+export async function getSeatUsage(
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<SeatUsageSample[]> {
+  return client.requestJson<SeatUsageSample[]>({
+    method: "GET",
+    path: "/v1/cloud/agent-auth/seats/usage",
+  });
+}
+
+/**
+ * The pane-open poke: force one fresh sample per seat, then read. The server
+ * keeps a per-seat freshness floor, so pane flapping cannot amplify outbound
+ * probes; the returned rows are the fresh latest-per-seat set.
+ */
+export async function refreshSeatUsage(
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<SeatUsageSample[]> {
+  return client.requestJson<SeatUsageSample[]>({
+    method: "POST",
+    path: "/v1/cloud/agent-auth/seats/usage/refresh",
   });
 }
 

@@ -23,6 +23,12 @@ export type AgentAuthDeliveryAck = Schema<"AgentAuthDeliveryAckResponse">;
 export type AgentGatewayCapabilities = Schema<"AgentGatewayCapabilitiesResponse">;
 export type AgentGatewayEnrollment = Schema<"AgentGatewayEnrollmentResponse">;
 
+// Flow 5's soft signal (agent_auth spec §2/§3, slice 4 meters): the latest
+// usage-probe sample per seat — 0..1 utilization fractions, ISO reset
+// instants, the binding window, and an honest `probe_failed` status when no
+// trustworthy observation exists. Advisory only; never gates a launch.
+export type SeatUsageSample = Schema<"SeatUsageSampleResponse">;
+
 // The auth-selection route (native CLI login / a bound api_key row / the
 // Proliferate gateway). This is a UI-selection concept, not a cloud-catalog
 // wire field — the served model responses carry no route (and, after the

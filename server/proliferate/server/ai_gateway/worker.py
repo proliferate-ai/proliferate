@@ -12,6 +12,12 @@ LiteLLM spend logs and enforces LLM-credit exhaustion every
 overage-enabled subjects that dropped below the credit threshold every
 ``agent_gateway_topup_interval_seconds`` (and only when the LLM top-up price
 is configured). All only run when the gateway is enabled.
+
+The seat usage-probe worker (slice 4, agent_auth spec §3 flow 5) is the one
+exception to the gateway gate: seats are Max-subscription credentials with no
+LiteLLM dependency, so it runs whenever background workers do. It ticks every
+minute and probes only the seats whose own cadence (active/idle intervals,
+failure backoff) says they are due.
 """
 
 from __future__ import annotations
