@@ -1,12 +1,1 @@
-<svg width="482" height="96" viewBox="0 0 348 96" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
-  <rect x="33.7" y="45.7" width="12.6" height="12.6" fill="#090909"/>
-  <rect x="36.89" y="28.06" width="6.22" height="6.22" fill="#090909"/>
-  <rect x="47.31" y="38.48" width="6.22" height="6.22" fill="#090909"/>
-  <rect x="57.72" y="48.89" width="6.22" height="6.22" fill="#090909"/>
-  <rect x="47.31" y="59.31" width="6.22" height="6.22" fill="#090909"/>
-  <rect x="36.89" y="69.72" width="6.22" height="6.22" fill="#090909"/>
-  <rect x="26.48" y="59.31" width="6.22" height="6.22" fill="#090909"/>
-  <rect x="16.06" y="48.89" width="6.22" height="6.22" fill="#090909"/>
-  <rect x="26.48" y="38.48" width="6.22" height="6.22" fill="#090909"/>
-  <text x="78" y="68" fill="#111318" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="52" font-weight="760" letter-spacing="0">Proliferate</text>
-</svg>
+<svg width="482" height="96" viewBox="0 0 348 96" xmlns="http://www.w3.org/2000/svg"><defs><mask id="e" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64"><rect width="64" height="64" fill="#fff"/><circle cx="29" cy="27" r="4.5" fill="#000"/><circle cx="41" cy="27" r="4.5" fill="#000"/></mask></defs><g transform="translate(6 12) scale(1.125)"><path d="M8 44a8 8 0 0 1 8-8h32a8 8 0 0 1 0 16H16a8 8 0 0 1-8-8z M20 20a12 12 0 1 1 0 24a12 12 0 1 1 0-24z M36 8a16 16 0 1 1 0 32a16 16 0 1 1 0-32z M50 26a10 10 0 1 1 0 20a10 10 0 1 1 0-20z" fill="#1A1A1A" fill-rule="nonzero" mask="url(#e)"/></g><text x="92" y="68" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif" font-weight="600" font-size="54" letter-spacing="-0.035em" fill="#1A1A1A">proliferate</text></svg>
