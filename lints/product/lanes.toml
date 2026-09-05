@@ -376,26 +376,8 @@ cadence = "via caller"
 gate_mirrored = false
 
 # Release-train lanes (event cadence "per release" is honest)
-[[lane]]
-workflow = "release-desktop.yml"
-job = "build-desktop"
-pipeline = "release"
-cadence = "per release (called by release.yml; tag push + dispatch)"
-gate_mirrored = false
 
-[[lane]]
-workflow = "release-desktop.yml"
-job = "create-release"
-pipeline = "release"
-cadence = "per release (called by release.yml; tag push + dispatch)"
-gate_mirrored = false
 
-[[lane]]
-workflow = "release-desktop.yml"
-job = "publish-updater"
-pipeline = "release"
-cadence = "per release (called by release.yml; tag push + dispatch)"
-gate_mirrored = false
 
 [[lane]]
 workflow = "release-runtime.yml"
@@ -665,12 +647,6 @@ owner = "testing/release"
 reason = "provisional self-host provisioning lanes pending the posture ruling"
 expires = "2026-09-30"
 
-[[quarantine]]
-workflow = "release-desktop.yml"
-job = "build-desktop"
-owner = "desktop-host"
-reason = "windows desktop build soft-allowed while windows is canary-grade (conditional on matrix.runner_os)"
-expires = "2026-09-30"
 
 [[quarantine]]
 workflow = "windows-compile-check.yml"
@@ -685,3 +661,11 @@ job = "desktop"
 owner = "desktop-host"
 reason = "windows canary lanes report without blocking; C5 ruling open"
 expires = "2026-09-30"
+
+[[lane]]
+workflow = "release-desktop.yml"
+job = "sign"
+pipeline = "dispatch-with-sunset"
+cadence = "fixed foundation candidate qualification; isolated branch only"
+sunset = "2026-09-11"
+gate_mirrored = false

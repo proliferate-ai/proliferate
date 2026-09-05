@@ -1,5 +1,18 @@
 # Delivery System
 
+## Foundation qualification branch
+
+On `codex/foundation-signing`, `release-desktop.yml` temporarily packages the fixed
+foundation candidate `b5928e63f61dbfd61f62fb8000e67bae9b5f0220`. Dispatch verifies
+its private source archive checksum, builds before loading signing credentials,
+signs bundled Node before recording its final hash, signs and notarizes the app,
+and retains the signed ZIP plus verification receipt as a private workflow artifact.
+The existing Apple credentials stay in this repository. This branch does not create
+a public release or publish an updater, and its dispatch lane sunsets September 11,
+2026. It is an isolated qualification adapter; the main-branch delivery topology
+below is unchanged. Installed OAuth and subsequent-version replacement are separate
+qualification steps and are not asserted by the signing receipt.
+
 Expands: [README.md#5--the-cd-line](README.md#5--the-cd-line)
 
 Delivery owns the repository's artifact identities and the topology that builds, deploys, promotes, and publishes them. It describes what the checked-in automation does **today**; the ruled direction it converges toward (continuous staging, one artifact base, deliberate prod promote) is [pipelines.md](pipelines.md). Operator steps live in [Developing: Deploying](../../../guides/deploying/README.md).
