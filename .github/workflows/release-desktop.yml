@@ -1,1386 +1,157 @@
-name: Release Desktop
+name: Foundation Desktop Qualification
 
 on:
-  push:
-    tags:
-      - "desktop-v*"
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Dry run (skip GitHub release creation and updater publish)"
-        type: boolean
-        default: false
-      publish_updater:
-        description: "Publish updater/download assets to S3 and CloudFront on manual runs"
-        type: boolean
-        default: false
-      target_os:
-        description: "Target OS"
-        type: choice
-        options:
-          - all
-          - macos
-          - windows
-        default: all
-      enable_windows_beta:
-        description: "Opt into building the Windows beta leg (never on by default; see B2 in PR #2150)"
-        type: boolean
-        default: false
-      allow_unsigned:
-        description: "Allow ad-hoc (unsigned) macOS builds when APPLE_SIGNING_IDENTITY is not configured"
-        type: boolean
-        default: false
-      release_title:
-        description: "Optional one-line release notice title (80 characters maximum)"
-        type: string
-        required: false
-        default: ""
-  workflow_call:
-    inputs:
-      git_sha:
-        description: "Commit SHA to package. Defaults to the caller ref."
-        required: false
-        type: string
-      version:
-        description: "Desktop version to release. Required for non-tag reusable releases."
-        required: false
-        type: string
-      dry_run:
-        description: "Dry run (skip GitHub release creation and updater publish)"
-        type: boolean
-        default: false
-      publish_updater:
-        description: "Publish updater/download assets to S3 and CloudFront"
-        type: boolean
-        default: false
-      target_os:
-        description: "Target OS"
-        type: string
-        default: all
-      enable_windows_beta:
-        description: "Opt into building the Windows beta leg (never on by default; see B2 in PR #2150)"
-        type: boolean
-        default: false
-      allow_unsigned:
-        description: "Allow ad-hoc (unsigned) macOS builds when APPLE_SIGNING_IDENTITY is not configured"
-        type: boolean
-        default: false
-      release_title:
-        description: "Optional one-line release notice title (80 characters maximum)"
-        required: false
-        type: string
-        default: ""
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  VITE_PROLIFERATE_API_BASE_URL: ${{ vars.VITE_PROLIFERATE_API_BASE_URL }}
-  VITE_PROLIFERATE_ENVIRONMENT: ${{ vars.VITE_PROLIFERATE_ENVIRONMENT || 'production' }}
-  VITE_REQUIRE_AUTH: ${{ vars.VITE_REQUIRE_AUTH || 'true' }}
-  VITE_PROLIFERATE_SENTRY_DSN: ${{ vars.VITE_PROLIFERATE_SENTRY_DSN }}
-  VITE_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE: ${{ vars.VITE_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE }}
-  VITE_PROLIFERATE_SENTRY_ENABLE_LOGS: ${{ vars.VITE_PROLIFERATE_SENTRY_ENABLE_LOGS }}
-  VITE_PROLIFERATE_POSTHOG_KEY: ${{ vars.VITE_PROLIFERATE_POSTHOG_KEY }}
-  VITE_PROLIFERATE_POSTHOG_HOST: ${{ vars.VITE_PROLIFERATE_POSTHOG_HOST }}
-  SENTRY_DESKTOP_RENDERER_PROJECT: ${{ vars.SENTRY_DESKTOP_RENDERER_PROJECT || vars.SENTRY_PROJECT }}
-  PROLIFERATE_DESKTOP_SENTRY_DSN: ${{ vars.PROLIFERATE_DESKTOP_SENTRY_DSN || vars.VITE_PROLIFERATE_SENTRY_DSN }}
-  PROLIFERATE_DESKTOP_SENTRY_ENVIRONMENT: ${{ vars.PROLIFERATE_DESKTOP_SENTRY_ENVIRONMENT || vars.VITE_PROLIFERATE_ENVIRONMENT || 'production' }}
-  PROLIFERATE_DESKTOP_SENTRY_TRACES_SAMPLE_RATE: ${{ vars.PROLIFERATE_DESKTOP_SENTRY_TRACES_SAMPLE_RATE || vars.VITE_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE }}
-  ANYHARNESS_SENTRY_DSN: ${{ vars.ANYHARNESS_SENTRY_DSN || vars.E2B_RUNTIME_SENTRY_DSN }}
-  ANYHARNESS_SENTRY_ENVIRONMENT: ${{ vars.ANYHARNESS_SENTRY_ENVIRONMENT || vars.E2B_RUNTIME_SENTRY_ENVIRONMENT || vars.VITE_PROLIFERATE_ENVIRONMENT || 'production' }}
-  ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE: ${{ vars.ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE || vars.E2B_RUNTIME_SENTRY_TRACES_SAMPLE_RATE }}
-  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-
-# Reusable callers provide a bare version, while tag-push and manual tag runs
-# identify the same release with desktop-v*. Normalize both to one lock key so
-# a queued same-version run cannot reach shared release assets concurrently.
 concurrency:
-  group: release-desktop-${{ inputs.version && format('desktop-v{0}', inputs.version) || github.ref_name }}
+  group: foundation-desktop-signing
   cancel-in-progress: false
 
+env:
+  RELEASE: b5928e63f61dbfd61f62fb8000e67bae9b5f0220
+  SOURCE_SHA256: ac6dc73335048b90f739c57b3c71bfd3038f8aeaddb0971a22e1092f0c337d2d
+  VITE_RELEASE: b5928e63f61dbfd61f62fb8000e67bae9b5f0220
+  VITE_ENV: staging
+  VITE_TELEMETRY_MODE: prod
+  VITE_SHELL: desktop
+  VITE_API_URL: https://api-staging.proliferate.com
+
 jobs:
-  build-desktop:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-15
-            target: aarch64-apple-darwin
-            runner_os: macos
-          # Intel builds paused 2026-08-20; restore by re-adding this matrix entry.
-          # - os: macos-15-intel
-          #   target: x86_64-apple-darwin
-          #   runner_os: macos
-          # Windows was removed 2026-04-13 by 3d3c0504b8 because the SDK
-          # generate step was POSIX-shell only. That step is node now, so the
-          # leg is back for the beta. The matrix entry itself is unconditional;
-          # "Decide whether to build this matrix entry" below is what actually
-          # keeps it from running unless `enable_windows_beta` is explicitly
-          # true, so it never rides along on push, workflow_call or
-          # unattended workflow_dispatch runs.
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            runner_os: windows
-
-    runs-on: ${{ matrix.os }}
-
-    # Beta posture: Windows is best effort. A failed Windows leg must not take
-    # the macOS release down with it, and `needs: build-desktop` on
-    # create-release would do exactly that if this job reported failure. Delete
-    # this line to make Windows release-blocking.
-    continue-on-error: ${{ matrix.runner_os == 'windows' }}
-
-    env:
-      # The desktop renderer (vite) build OOMs the default Node heap on the
-      # macOS-Intel runner; give every node step in this job ample headroom.
-      NODE_OPTIONS: --max-old-space-size=8192
-
+  sign:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/foundation-signing'
+    runs-on: macos-15
+    timeout-minutes: 45
     steps:
-      - name: Decide whether to build this matrix entry
-        id: filter
-        shell: bash
-        env:
-          TARGET_OS: ${{ inputs.target_os || 'all' }}
-          # `inputs.enable_windows_beta` is only populated on workflow_dispatch
-          # and workflow_call. A `push` (desktop-v* tag) event carries no
-          # inputs at all, so this is empty/false there too, and the Windows
-          # leg cannot ride along on a tag push. Every workflow_call caller
-          # must opt in explicitly; none does today (see guides/deploying/releases.md).
-          ENABLE_WINDOWS_BETA: ${{ inputs.enable_windows_beta && 'true' || 'false' }}
-        run: |
-          skip=false
-          if [[ "${{ github.event_name }}" != "push" ]] && [[ "$TARGET_OS" != "all" ]] && [[ "$TARGET_OS" != "${{ matrix.runner_os }}" ]]; then
-            skip=true
-          fi
-          if [[ "${{ matrix.runner_os }}" == "windows" ]] && [[ "$ENABLE_WINDOWS_BETA" != "true" ]]; then
-            skip=true
-          fi
-          echo "skip=$skip" >> "$GITHUB_OUTPUT"
-
-      - name: Validate release ref
-        if: steps.filter.outputs.skip != 'true' && github.event_name == 'workflow_dispatch' && !inputs.dry_run && !inputs.git_sha
-        shell: bash
-        run: |
-          if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != desktop-v* ]]; then
-            echo "::error::Manual non-dry-run desktop releases must run from a desktop-v* tag ref, not ${GITHUB_REF_TYPE}:${GITHUB_REF_NAME}."
-            exit 1
-          fi
-
-      - name: Checkout
-        if: steps.filter.outputs.skip != 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_sha || github.ref }}
-
-      - name: Validate version consistency
-        if: steps.filter.outputs.skip != 'true' && (github.event_name == 'push' || (github.event_name != 'push' && !inputs.dry_run))
-        shell: bash
+          persist-credentials: false
+      - name: Fetch the fixed reviewed source archive
         env:
-          INPUT_VERSION: ${{ inputs.version || '' }}
+          SOURCE_URL: ${{ secrets.FOUNDATION_SOURCE_URL }}
         run: |
-          if [[ "${GITHUB_REF_NAME:-}" == desktop-v* ]]; then
-            RELEASE_VERSION="${GITHUB_REF_NAME#desktop-v}"
-          else
-            RELEASE_VERSION="$INPUT_VERSION"
-          fi
-          if [[ -z "$RELEASE_VERSION" ]]; then
-            echo "::error::A desktop version input is required for non-tag releases."
-            exit 1
-          fi
-          PKG_VERSION=$(node -p "require('./apps/desktop/package.json').version")
-          TAURI_VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./apps/desktop/src-tauri/tauri.conf.json','utf8')).version")
-          CARGO_VERSION=$(grep '^version' apps/desktop/src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-          if [[ "$RELEASE_VERSION" != "$PKG_VERSION" ]] || [[ "$RELEASE_VERSION" != "$TAURI_VERSION" ]] || [[ "$RELEASE_VERSION" != "$CARGO_VERSION" ]]; then
-            echo "::error::Version mismatch: release=$RELEASE_VERSION pkg=$PKG_VERSION tauri=$TAURI_VERSION cargo=$CARGO_VERSION"
-            exit 1
-          fi
-
-      # pnpm must be installed BEFORE `actions/setup-node` so that the
-      # `cache: pnpm` input below can shell out to `pnpm store path` to locate
-      # the content-addressable store. This is the same ordering every pnpm job
-      # in ci.yml uses.
-      - name: Setup pnpm
-        if: steps.filter.outputs.skip != 'true'
-        uses: pnpm/action-setup@v6
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          test -n "$SOURCE_URL"
+          curl --fail --silent --show-error "$SOURCE_URL" --output "$RUNNER_TEMP/source.tar.gz"
+          test "$(shasum -a 256 "$RUNNER_TEMP/source.tar.gz" | awk '{print $1}')" = "$SOURCE_SHA256"
+          mkdir -p "$RUNNER_TEMP/foundation"
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" -C "$RUNNER_TEMP/foundation"
+          echo "SOURCE_DIR=$RUNNER_TEMP/foundation" >> "$GITHUB_ENV"
+      - uses: pnpm/action-setup@v4
         with:
-          version: 10.11.0
-
-      # `cache: pnpm` caches the pnpm content-addressable store (NOT any
-      # node_modules tree). setup-node derives the key itself as
-      # `node-cache-<platform>-<arch>-pnpm-<hash of **/pnpm-lock.yaml>`, so any
-      # lockfile edit — a version bump, an added package, a resolution change —
-      # produces a different key, and macOS arm64 never shares a key with any
-      # other runner OS/arch. `pnpm install` still resolves against the lockfile
-      # and re-links node_modules on a hit; only the tarball downloads are
-      # skipped, so a hit cannot change which package versions get installed.
-      - name: Setup Node 22
-        if: steps.filter.outputs.skip != 'true'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+          version: 10.34.5
+          package_json_file: ${{ runner.temp }}/foundation/package.json
+      - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          # setup-node's built-in cache has no save-if control, and a cache
-          # written under a tag ref can never be restored by any later run, so
-          # tag-triggered releases would only pollute the repo's 10GB LRU cache
-          # budget with dead entries. Enable the cache only off tag refs (the
-          # nightly train runs on main and both saves and restores); an empty
-          # cache input disables caching entirely.
-          cache: ${{ github.ref_type != 'tag' && 'pnpm' || '' }}
-
-      - name: Validate release title
-        if: steps.filter.outputs.skip != 'true'
-        shell: bash
-        env:
-          RELEASE_TITLE: ${{ inputs.release_title || '' }}
-        run: |
-          node scripts/generate-updater-manifest.mjs \
-            --notes "$RELEASE_TITLE" \
-            --validate-notes-only true
-
-      - name: Resolve release metadata
-        if: steps.filter.outputs.skip != 'true'
-        shell: bash
-        env:
-          INPUT_VERSION: ${{ inputs.version || '' }}
-        run: |
-          package_version=$(node -p "require('./apps/desktop/package.json').version")
-          if [[ "${GITHUB_REF_NAME:-}" == desktop-v* ]]; then
-            release_version="${GITHUB_REF_NAME#desktop-v}"
-          elif [[ -n "$INPUT_VERSION" ]]; then
-            release_version="$INPUT_VERSION"
-          else
-            safe_ref=$(printf '%s' "${GITHUB_REF_NAME:-$GITHUB_SHA}" | sed 's/[^A-Za-z0-9._-]/-/g')
-            release_version="${package_version}-${safe_ref}-${GITHUB_SHA::12}"
-          fi
-          echo "PROLIFERATE_RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
-          echo "Using release version $release_version"
-
-      # Fail-fast preflight, lifted verbatim out of "Build frontend" below.
-      # The check itself is unchanged — same env resolution
-      # (SENTRY_DESKTOP_RENDERER_PROJECT || SENTRY_PROJECT), same request, same
-      # error text — only its position moved. It used to sit behind the Rust
-      # build, the agent seed and the SDK build, so a misconfigured Sentry
-      # project failed the release at roughly minute 13 instead of second 20.
-      - name: Preflight Sentry renderer project
-        if: steps.filter.outputs.skip != 'true'
-        shell: bash
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ vars.SENTRY_DESKTOP_RENDERER_PROJECT || vars.SENTRY_PROJECT }}
-          SENTRY_URL: ${{ vars.SENTRY_URL }}
-        run: |
-          export VITE_PROLIFERATE_RELEASE="proliferate-desktop@${PROLIFERATE_RELEASE_VERSION}"
-
-          if [[ -n "$VITE_PROLIFERATE_SENTRY_DSN" ]]; then
-            : "${SENTRY_AUTH_TOKEN:?Set SENTRY_AUTH_TOKEN secret for desktop renderer Sentry sourcemaps.}"
-            : "${SENTRY_ORG:?Set SENTRY_ORG GitHub variable for desktop renderer Sentry sourcemaps.}"
-            : "${SENTRY_PROJECT:?Set SENTRY_DESKTOP_RENDERER_PROJECT or SENTRY_PROJECT GitHub variable for desktop renderer Sentry sourcemaps.}"
-          fi
-
-          if [[ -n "$SENTRY_AUTH_TOKEN" && -n "$SENTRY_ORG" && -n "$SENTRY_PROJECT" && -n "$VITE_PROLIFERATE_RELEASE" ]]; then
-            sentry_url="${SENTRY_URL:-https://sentry.io/}"
-            sentry_status="$(
-              curl -sS -o /tmp/sentry-desktop-renderer-project.json -w "%{http_code}" \
-                -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
-                "${sentry_url%/}/api/0/projects/${SENTRY_ORG}/${SENTRY_PROJECT}/" \
-                || true
-            )"
-
-            if [[ "$sentry_status" != "200" ]]; then
-              echo "::error::Sentry desktop renderer project '$SENTRY_PROJECT' is not accessible in org '$SENTRY_ORG' (HTTP $sentry_status). Update SENTRY_DESKTOP_RENDERER_PROJECT before releasing."
-              exit 1
-            fi
-          fi
-
-      - name: Setup Rust stable
-        if: steps.filter.outputs.skip != 'true'
-        uses: dtolnay/rust-toolchain@stable
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
-
-      # Cache the cargo registry/git checkouts and target/ artifacts, keyed per
-      # matrix target so the macOS arches (and any dormant windows entry) never
-      # share or collide on a cache key. Paired with the single combined cargo
-      # invocation below: one build graph, one cache, instead of four sequential
-      # `cargo build -p <pkg>` steps that each re-resolved the same workspace
-      # dependencies.
-      #
-      # Scope note: `workspaces` is left at its default (`. -> target`) on
-      # purpose. `apps/desktop/src-tauri` is a member of the root cargo
-      # workspace (see the root Cargo.toml `members` list) and has no
-      # CARGO_TARGET_DIR override, so `pnpm tauri build` compiles into this same
-      # root `target/` — the release log shows `Built application at:
-      # <repo>/target/aarch64-apple-darwin/release/proliferate`, and every
-      # verification step below reads `../../target/...` from apps/desktop.
-      # There is no second `apps/desktop/src-tauri/target` to add here. The same
-      # default also covers the host-triple `target/debug` tree that
-      # `Generate and build SDK` builds via `cargo run --bin anyharness --
-      # print-openapi`.
-      - name: Rust cache
-        if: steps.filter.outputs.skip != 'true'
-        uses: Swatinem/rust-cache@v2
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
-          # Actions caches are ref-scoped. This workflow also triggers on
-          # `push: tags: desktop-v*`, and a save made under `refs/tags/...` can
-          # only ever be restored by that same tag, so it is a pure write into
-          # an already-tight repo cache pool. Only branch / dispatch runs save.
-          save-if: ${{ github.ref_type != 'tag' }}
-          # Notarization and publish are the late, occasionally-failing part of
-          # this job. A failure there should still bank the compile cache the
-          # preceding ~12 minutes produced.
-          cache-on-failure: true
-
-      - name: Build Rust binaries for target
-        if: steps.filter.outputs.skip != 'true'
-        shell: bash
+          workspaces: ${{ runner.temp }}/foundation/client/apps/desktop/src-tauri
+          shared-key: foundation-macos-arm64
+      - name: Build the exact candidate before loading Apple credentials
         run: |
-          # proliferate-diagnostics-collector is POSIX-only: process.rs reads an
-          # inherited descriptor through an unconditional `use std::os::fd`, so
-          # the crate does not compile for x86_64-pc-windows-msvc at all. The
-          # desktop build script already recognizes Windows as an unsupported
-          # collector target and stages an explicit placeholder sidecar, so
-          # asking cargo for the real one here would only fail the leg.
-          if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
-            cargo build --release --target "${{ matrix.target }}" \
-              -p anyharness \
-              -p proliferate-debug \
-              -p proliferate-worker
-          else
-            cargo build --release --target "${{ matrix.target }}" \
-              -p anyharness \
-              -p proliferate-diagnostics-collector \
-              -p proliferate-debug \
-              -p proliferate-worker
-          fi
-          mkdir -p apps/desktop/src-tauri/binaries
-          if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
-            cp "target/${{ matrix.target }}/release/anyharness.exe" "apps/desktop/src-tauri/binaries/anyharness-${{ matrix.target }}.exe"
-          else
-            cp "target/${{ matrix.target }}/release/anyharness" "apps/desktop/src-tauri/binaries/anyharness-${{ matrix.target }}"
-            chmod +x "apps/desktop/src-tauri/binaries/anyharness-${{ matrix.target }}"
-          fi
-
-      - name: Install seed packaging tools
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        shell: bash
-        run: brew install zstd
-
-      # Deliberately NOT cached. The seed archive is not a pure function of
-      # anything this repo pins: `anyharness install-agents` materializes each
-      # adapter's agent_process from the catalog's `git` source with a plain
-      # `npm install git+<repo>#<sha>` (installer/npm.rs
-      # `install_npm_package_into_prefix`) — no lockfile, no `npm ci`. Those
-      # adapters carry floating ranges (`codex-acp` depends on
-      # `@openai/codex: ^0.147.0`, `zod: ^4.0.0`; `claude-agent-acp` depends on
-      # `zod: ^3.25.0 || ^4.0.0`), so a key derived from catalog.json +
-      # agent-seed.inputs.json + build-agent-seed.mjs + the app version would
-      # hit while the resolved agent tree had legitimately moved on, and the
-      # release would silently ship a stale Codex CLI. Only the node/native
-      # halves are sha256-pinned. Re-open this if the git sources are moved to
-      # sha-pinned tarballs or a committed lockfile.
-      #
-      # Started here, collected in "Finish bundled agent seed" after the
-      # renderer build. The seed and the SDK/renderer builds are the only two
-      # chunks of this job that can overlap: both need nothing but the release
-      # `anyharness` the step above produced, neither reads the other's
-      # outputs (the seed writes `src-tauri/agent-seeds/` plus an npm prefix
-      # under a mktemp runtime home; the JS side writes `node_modules`,
-      # `anyharness/sdk*/dist` and `apps/desktop/dist`), and they load
-      # different resources — the seed is npm/network followed by one
-      # `tar | zstd` pipe, the JS side is node/esbuild. Run serially they were
-      # 97s + 36s + 69s in release-desktop run 32454795006.
-      #
-      # Doing this as a GitHub job fan-out instead was measured and rejected:
-      # the seed cannot start until the Rust build has produced `anyharness`,
-      # so the only overlap on offer is those same ~97s, while two extra macOS
-      # job setups plus a second Rust-capable setup on the joining job cost
-      # ~76s of it before a single artifact byte moves. See the PR for the
-      # per-step arithmetic.
-      - name: Start bundled agent seed
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        shell: bash
-        run: |
-          seed_runtime="$(mktemp -d)"
-          {
-            echo "SEED_RUNTIME_HOME=$seed_runtime"
-            echo "SEED_LOG=$RUNNER_TEMP/agent-seed.log"
-            echo "SEED_STATUS=$RUNNER_TEMP/agent-seed.status"
-          } >> "$GITHUB_ENV"
-          rm -f "$RUNNER_TEMP/agent-seed.status"
-
-          # stdin from /dev/null and both output streams into a file. The
-          # runner reads a step's stdout to EOF, so a background child holding
-          # the inherited pipe open would block the step until the child
-          # exited — which is exactly the overlap this is buying.
-          (
-            seed_exit=0
-            node scripts/build-agent-seed.mjs \
-              --target "${{ matrix.target }}" \
-              --anyharness-bin "$PWD/target/${{ matrix.target }}/release/anyharness" \
-              --runtime-home "$seed_runtime" \
-              --output-dir "$PWD/apps/desktop/src-tauri/agent-seeds" || seed_exit=$?
-            echo "$seed_exit" > "$RUNNER_TEMP/agent-seed.status.tmp"
-            mv -f "$RUNNER_TEMP/agent-seed.status.tmp" "$RUNNER_TEMP/agent-seed.status"
-          ) </dev/null > "$RUNNER_TEMP/agent-seed.log" 2>&1 &
-          disown 2>/dev/null || true
-          echo "Agent seed build started in the background (pid $!)."
-
-      - name: Stage diagnostics collector for target
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os != 'windows'
-        shell: bash
-        run: |
-          mkdir -p apps/desktop/src-tauri/binaries
-          collector="target/${{ matrix.target }}/release/proliferate-diagnostics-collector"
-          staged="apps/desktop/src-tauri/binaries/proliferate-diagnostics-collector-${{ matrix.target }}"
-          test -x "$collector"
-          cp "$collector" "$staged"
-          chmod +x "$staged"
-          cmp "$collector" "$staged"
-
-      # Say the losses out loud rather than letting a placeholder sidecar and an
-      # empty resource directory pass for working ones. The desktop build script
-      # writes the collector placeholder; this step exists so the release log
-      # records what a Windows user does not get.
-      - name: Report Windows beta gaps
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'windows'
-        shell: bash
-        run: |
-          echo "::warning::Windows beta ships a placeholder diagnostics collector. proliferate-diagnostics-collector does not compile for x86_64-pc-windows-msvc, so in-app diagnostics capture, the support-report snapshot and the collector-backed export path are all unavailable in this build."
-          echo "::warning::Windows beta ships no bundled agent seed. agent-seed.inputs.json pins Node only for the two Apple targets and build-agent-seed.mjs is native-macOS-only, so this build sets ANYHARNESS_AGENT_SEED_EXPECTED with no seed present. No managed agent launcher can run on Windows yet (see PR body), so there is no fallback to \"whatever Node the machine already has\" either."
-          echo "::warning::Windows installers are not Authenticode signed. First launch shows a click-through SmartScreen warning. The Tauri updater minisign signature is separate and is applied."
-
-      - name: Stage Proliferate debug helper for target
-        if: steps.filter.outputs.skip != 'true'
-        shell: bash
-        run: |
-          mkdir -p apps/desktop/src-tauri/binaries
-          if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
-            cp "target/${{ matrix.target }}/release/proliferate-debug.exe" "apps/desktop/src-tauri/binaries/proliferate-debug-${{ matrix.target }}.exe"
-          else
-            cp "target/${{ matrix.target }}/release/proliferate-debug" "apps/desktop/src-tauri/binaries/proliferate-debug-${{ matrix.target }}"
-            chmod +x "apps/desktop/src-tauri/binaries/proliferate-debug-${{ matrix.target }}"
-          fi
-
-      - name: Stage Proliferate worker for target
-        if: steps.filter.outputs.skip != 'true'
-        shell: bash
-        run: |
-          mkdir -p apps/desktop/src-tauri/binaries
-          if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
-            cp "target/${{ matrix.target }}/release/proliferate-worker.exe" "apps/desktop/src-tauri/binaries/proliferate-worker-${{ matrix.target }}.exe"
-          else
-            cp "target/${{ matrix.target }}/release/proliferate-worker" "apps/desktop/src-tauri/binaries/proliferate-worker-${{ matrix.target }}"
-            chmod +x "apps/desktop/src-tauri/binaries/proliferate-worker-${{ matrix.target }}"
-          fi
-
-      # `pnpm run generate` shells out to `generate:openapi`, which by default
-      # runs `cargo run --bin anyharness -- print-openapi` — a SECOND, dev-profile
-      # compile of the whole anyharness crate graph (~1000 crates into
-      # target/debug) purely to print a static document. "Build Rust binaries for
-      # target" above already produced a release `anyharness` for this target,
-      # and `openapi_json()` has no profile-dependent cfg, so both binaries emit
-      # the same JSON. scripts/generate-anyharness-openapi.mjs (which
-      # generate:openapi now runs) takes a prebuilt runtime when SKIP_RUST is
-      # set and ANYHARNESS_DEV_RUNTIME_BIN is executable, so point it at the
-      # binary we already have; the guard below refuses to run rather than
-      # silently falling back to `cargo run`.
-      - name: Generate and build SDK
-        if: steps.filter.outputs.skip != 'true'
-        shell: bash
-        env:
-          SKIP_RUST: "1"
-          ANYHARNESS_DEV_RUNTIME_BIN: ${{ github.workspace }}/target/${{ matrix.target }}/release/anyharness${{ matrix.runner_os == 'windows' && '.exe' || '' }}
-        run: |
-          pnpm install
-          if [[ ! -x "$ANYHARNESS_DEV_RUNTIME_BIN" ]]; then
-            echo "::error::Expected the release anyharness binary at $ANYHARNESS_DEV_RUNTIME_BIN (produced by 'Build Rust binaries for target'). Refusing to fall back to a dev-profile 'cargo run'."
-            exit 1
-          fi
-          cd anyharness/sdk && pnpm run generate && pnpm run build
-          cd ../sdk-react && pnpm run build
-
-      - name: Prepare Sentry CLI
-        if: steps.filter.outputs.skip != 'true'
-        shell: bash
-        run: pnpm rebuild @sentry/cli
-
-      - name: Build frontend
-        if: steps.filter.outputs.skip != 'true'
-        working-directory: apps/desktop
-        shell: bash
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ vars.SENTRY_DESKTOP_RENDERER_PROJECT || vars.SENTRY_PROJECT }}
-          SENTRY_URL: ${{ vars.SENTRY_URL }}
-        run: |
-          export VITE_PROLIFERATE_RELEASE="proliferate-desktop@${PROLIFERATE_RELEASE_VERSION}"
-
-          if [[ -n "$VITE_PROLIFERATE_SENTRY_DSN" ]]; then
-            : "${SENTRY_AUTH_TOKEN:?Set SENTRY_AUTH_TOKEN secret for desktop renderer Sentry sourcemaps.}"
-            : "${SENTRY_ORG:?Set SENTRY_ORG GitHub variable for desktop renderer Sentry sourcemaps.}"
-            : "${SENTRY_PROJECT:?Set SENTRY_DESKTOP_RENDERER_PROJECT or SENTRY_PROJECT GitHub variable for desktop renderer Sentry sourcemaps.}"
-          fi
-
-          # Launch gate: ship with cloud compute hidden (identity/billing stay
-          # enabled). Set here as well as in "Build Tauri app" because this step
-          # is now the sole producer of the dist/ that gets packaged — the tauri
-          # passes no longer re-run the frontend build. Remove both lines to
-          # re-enable cloud workspaces in builds.
-          export VITE_PROLIFERATE_DISABLE_CLOUD_COMPUTE=1
-
-          pnpm run build
-
-      # Collects the background seed build started before the SDK/renderer
-      # steps. Everything below the wait is the verification the single
-      # "Build bundled agent seed" step used to run inline, unchanged.
-      - name: Finish bundled agent seed
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        shell: bash
-        run: |
-          # The background subshell writes the status file on success *and* on
-          # failure, so a file that never appears means the child died without
-          # reaching its own tail (or the runner reaped it). That has to fail
-          # loudly: a release with no agent seed must never reach the bundler.
-          deadline=$(( SECONDS + 1500 ))
-          while [[ ! -f "$SEED_STATUS" ]]; do
-            if (( SECONDS > deadline )); then
-              echo "::group::agent seed log (incomplete)"
-              cat "$SEED_LOG" || true
-              echo "::endgroup::"
-              echo "::error::Agent seed build did not finish within 25 minutes."
-              exit 1
-            fi
-            sleep 2
-          done
-          echo "::group::agent seed log"
-          cat "$SEED_LOG"
-          echo "::endgroup::"
-          seed_exit="$(cat "$SEED_STATUS")"
-          [[ "$seed_exit" == "0" ]] || { echo "::error::Agent seed build failed with exit status $seed_exit"; exit 1; }
-
-          TMP_SEED_RUNTIME="$SEED_RUNTIME_HOME"
-          test -s "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.tar.zst"
-          test -s "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.sha256"
-          seed_count=$(find apps/desktop/src-tauri/agent-seeds -maxdepth 1 -type f -name 'agent-seed-*.tar.zst' | wc -l | tr -d ' ')
-          [[ "$seed_count" == "1" ]] || { echo "::error::Expected one target seed archive, found $seed_count"; exit 1; }
-          NODE_BIN="$TMP_SEED_RUNTIME/node/${{ matrix.target }}/bin/node"
-          codesign --verify --verbose "$NODE_BIN"
-          spctl --assess --verbose=4 --type open --context context:primary-signature "$NODE_BIN"
-
-          TMP_SEED_EXTRACT="$(mktemp -d)"
-          zstd -dc "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.tar.zst" | tar -xf - -C "$TMP_SEED_EXTRACT"
-          EXTRACTED_NODE_BIN="$TMP_SEED_EXTRACT/node/${{ matrix.target }}/bin/node"
-          codesign --verify --verbose "$EXTRACTED_NODE_BIN"
-          spctl --assess --verbose=4 --type open --context context:primary-signature "$EXTRACTED_NODE_BIN"
-          rm -rf "$TMP_SEED_EXTRACT"
-
-      - name: Import Apple Developer Certificate
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
+          set -euo pipefail
+          cd "$SOURCE_DIR"
+          pnpm install --frozen-lockfile
+          pnpm --filter @proliferate/desktop exec tauri build --target aarch64-apple-darwin --bundles app
+          app="$SOURCE_DIR/client/apps/desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Proliferate.app"
+          test -d "$app"
+          echo "BUILT_APP=$app" >> "$GITHUB_ENV"
+      - name: Import existing Apple signing identity into an isolated keychain
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-          if [[ -z "$APPLE_CERTIFICATE" ]]; then
-            echo "No Apple certificate configured, skipping code signing setup"
-            exit 0
-          fi
-          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
-          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security set-keychain-settings -t 3600 -u build.keychain
-          security import certificate.p12 -k build.keychain \
-            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: \
-            -s -k "$KEYCHAIN_PASSWORD" build.keychain
-          rm certificate.p12
-
-      - name: Write App Store Connect API key
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
+          set -euo pipefail
+          umask 077
+          test -n "$APPLE_CERTIFICATE" && test -n "$APPLE_CERTIFICATE_PASSWORD" && test -n "$KEYCHAIN_PASSWORD"
+          keychain="$RUNNER_TEMP/foundation-signing.keychain-db"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/foundation-certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security set-keychain-settings -t 3600 -u "$keychain"
+          security import "$RUNNER_TEMP/foundation-certificate.p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain"
+          rm "$RUNNER_TEMP/foundation-certificate.p12"
+      - name: Sign Node then record its final hash and sign the containing app
+        env:
+          SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          test -n "$SIGNING_IDENTITY" && test "$SIGNING_IDENTITY" != '-'
+          cat > "$RUNNER_TEMP/node-entitlements.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>com.apple.security.cs.allow-jit</key><true/>
+          <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+          </dict></plist>
+          PLIST
+          node_bin="$BUILT_APP/Contents/Resources/runtime/node"
+          test -x "$node_bin"
+          codesign --force --options runtime --timestamp --entitlements "$RUNNER_TEMP/node-entitlements.plist" --sign "$SIGNING_IDENTITY" "$node_bin"
+          python3 - <<'PYCODE'
+          import hashlib, json, os
+          from pathlib import Path
+          app=Path(os.environ['BUILT_APP'])
+          resources=app/'Contents/Resources/runtime'
+          manifest=resources/'manifest.json'
+          record=json.loads(manifest.read_text())
+          assert record['release']==os.environ['RELEASE'] and record['env']=='staging'
+          assert record['serverOrigin']=='https://api-staging.proliferate.com'
+          assert record['runtimeSha256']==hashlib.sha256((resources/'anyharness.mjs').read_bytes()).hexdigest()
+          record['nodeSha256']=hashlib.sha256((resources/'node').read_bytes()).hexdigest()
+          manifest.write_text(json.dumps(record,indent=2)+'\n')
+          PYCODE
+          "$node_bin" -e 'if (new Function("return 42")() !== 42) process.exit(1)'
+          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$BUILT_APP"
+          codesign --verify --deep --strict --verbose=2 "$BUILT_APP"
+          ditto -c -k --keepParent "$BUILT_APP" "$RUNNER_TEMP/Proliferate-notary.zip"
+      - name: Notarize, staple and verify the actual candidate app
         env:
           APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_PATH }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
-          if [[ -z "$APPLE_API_KEY" ]]; then
-            echo "No App Store Connect API key configured, skipping notarization setup"
-            exit 0
-          fi
-          mkdir -p "$HOME/private_keys"
-          echo "$APPLE_API_KEY_CONTENT" > "$HOME/private_keys/AuthKey_${APPLE_API_KEY}.p8"
-
-      - name: Build Tauri app
-        if: steps.filter.outputs.skip != 'true'
-        working-directory: apps/desktop
-        shell: bash
-        env:
-          _SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          _API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          _API_KEY: ${{ secrets.APPLE_API_KEY }}
-          ALLOW_UNSIGNED: ${{ inputs.allow_unsigned && 'true' || 'false' }}
-          # GitHub sets CI=true, which makes tauri-bundler pass --skip-jenkins to
-          # bundle_dmg.sh and silently skip all DMG styling from tauri.conf.json
-          # (background, icon positions, window size). Opt back in; if the Finder
-          # AppleScript fails the DMG build exits non-zero, so this cannot regress
-          # into silently shipping an unstyled DMG. See PRO-110.
-          TAURI_BUNDLER_DMG_IGNORE_CI: "true"
-        run: |
-          desktop_version="$(node -p "require('./package.json').version")"
-          anyharness_version="$(grep '^version' ../../anyharness/crates/anyharness/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')"
-          short_sha="${GITHUB_SHA:0:12}"
-
-          # Stamp the shipped sidecar's actual version so the desktop shell's
-          # boot-time runtime_version_assert (baked in via include_str! at
-          # compile time, below) compares against the anyharness build that is
-          # actually bundled alongside it, not a stale checked-in placeholder.
-          # Must happen before `pnpm tauri build` compiles the crate.
-          printf '{\n  "anyharnessVersion": "%s"\n}\n' "$anyharness_version" > runtime-version.json
-
-          export VITE_PROLIFERATE_RELEASE="${VITE_PROLIFERATE_RELEASE:-proliferate-desktop@${desktop_version}+${short_sha}}"
-          # Launch gate: ship with cloud compute hidden (identity/billing stay
-          # enabled). Remove this line to re-enable cloud workspaces in builds.
-          export VITE_PROLIFERATE_DISABLE_CLOUD_COMPUTE=1
-          export PROLIFERATE_DESKTOP_SENTRY_RELEASE="${PROLIFERATE_DESKTOP_SENTRY_RELEASE:-proliferate-desktop-native@${desktop_version}+${short_sha}}"
-          export ANYHARNESS_SENTRY_RELEASE="${ANYHARNESS_SENTRY_RELEASE:-anyharness@${anyharness_version}+${short_sha}}"
-
-          if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
-            export ANYHARNESS_BIN="$PWD/src-tauri/binaries/anyharness-${{ matrix.target }}.exe"
-          else
-            export ANYHARNESS_BIN="$PWD/src-tauri/binaries/anyharness-${{ matrix.target }}"
-          fi
-
-          if [[ "${{ matrix.runner_os }}" == "macos" ]]; then
-            if [[ -n "$_SIGNING_IDENTITY" ]]; then
-              export APPLE_SIGNING_IDENTITY="$_SIGNING_IDENTITY"
-              export APPLE_API_ISSUER="$_API_ISSUER"
-              export APPLE_API_KEY="$_API_KEY"
-              export APPLE_API_KEY_PATH="$HOME/private_keys/AuthKey_${_API_KEY}.p8"
-            elif [[ "$ALLOW_UNSIGNED" == "true" ]]; then
-              echo "::warning::Building macOS bundles with AD-HOC signing (allow_unsigned=true). Installing this build poisons login-keychain ACLs for its users."
-              export APPLE_SIGNING_IDENTITY="-"
-            else
-              echo "::error::APPLE_SIGNING_IDENTITY secret is not configured. Refusing to produce an ad-hoc-signed macOS release; ad-hoc builds break keychain persistence for every user who logs in on them. Dispatch with allow_unsigned=true to deliberately build unsigned."
-              exit 1
-            fi
-            # One invocation emits the app bundle, the DMG and the updater
-            # tarball. This used to be two passes — `--bundles dmg` then
-            # `--bundles app` — because a dmg-only pass emits no updater
-            # tarball. That is real, but the fix is to ask for both bundle
-            # types at once, not to run the bundler twice. In tauri-bundler
-            # 2.9.4 (pinned via @tauri-apps/cli 2.11.4, see its Cargo.lock):
-            #
-            #   * bundle.rs sorts the requested package types by
-            #     `PackageType::priority()` (settings.rs): MacOsBundle=0,
-            #     Dmg=1, Updater=2. So `--bundles app,dmg` always runs
-            #     app -> dmg, whatever order the flag lists them in.
-            #   * The updater artifact is appended by bundle.rs only when
-            #     `MacOsBundle` is among the requested types — that is the
-            #     whole reason dmg-only produced no tarball. `app,dmg`
-            #     satisfies it.
-            #   * dmg/mod.rs rebuilds (and separately signs + notarizes) its
-            #     own throwaway `.app` *only* when MacOsBundle was not already
-            #     built in the same run; otherwise it reuses the one on disk.
-            #     Two passes therefore paid two full `notarytool submit`
-            #     round trips and two Rust link steps for one release.
-            #   * macos/app.rs holds the only `notarize()` call site in the
-            #     macOS path; dmg/mod.rs and updater_bundle.rs never notarize.
-            #     One pass = exactly one notarization, asserted below.
-            #   * updater_bundle.rs tars the same on-disk `.app` the app step
-            #     notarized and stapled, so the DMG payload and the updater
-            #     payload are now the same stapled bundle instead of two
-            #     independently notarized builds.
-            #
-            # `-c '{"build":{"beforeBuildCommand":""}}'` blanks tauri.conf.json's
-            # `beforeBuildCommand: "pnpm build"` for this invocation only
-            # (tauri-cli merges the inline JSON over the file config, and treats
-            # an empty hook script as "no hook"). Without it the pass re-runs
-            # the entire renderer build that the "Build frontend" step above
-            # already ran: 3m43s + 2m58s of pure duplicate work in release run
-            # 30240922004. `frontendDist` is `../dist`, which is exactly what
-            # "Build frontend" writes, and nothing between the two steps
-            # touches it — only the keychain import and the API-key write run in
-            # between. This also makes the packaged bundle the same one whose
-            # sourcemaps were uploaded to Sentry: the rebuild used to happen
-            # without SENTRY_AUTH_TOKEN in scope and under a different
-            # VITE_PROLIFERATE_RELEASE, so the shipped renderer's release name
-            # never matched the uploaded artifacts.
-            tauri_config='{"build":{"beforeBuildCommand":""}}'
-            test -d dist || { echo "::error::apps/desktop/dist is missing; the Build frontend step must run before the tauri pass."; exit 1; }
-            # Tee the bundler output so the notarization-count assertion in
-            # "Verify macOS notarization and stapling" can read it. `shell:
-            # bash` runs with `-o pipefail`, so a bundler failure still fails
-            # the step.
-            pnpm tauri build --target ${{ matrix.target }} --bundles app,dmg -c "$tauri_config" \
-              2>&1 | tee "$RUNNER_TEMP/tauri-build.log"
-          else
-            pnpm tauri build --target ${{ matrix.target }} --bundles msi,nsis
-          fi
-
-      - name: Verify packaged native binary inventory
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        shell: bash
-        run: |
-          app="target/${{ matrix.target }}/release/bundle/macos/Proliferate.app"
-          bin_dir="$app/Contents/MacOS"
-          test -d "$bin_dir"
-          actual_inventory="$(find "$bin_dir" -mindepth 1 -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort | tr '\n' ' ')"
-          expected_inventory="anyharness proliferate proliferate-debug proliferate-diagnostics-collector proliferate-worker "
-          [[ "$actual_inventory" == "$expected_inventory" ]] || {
-            echo "::error::Unexpected Contents/MacOS inventory: $actual_inventory"
-            exit 1
-          }
-          for binary in anyharness proliferate-worker proliferate-debug proliferate-diagnostics-collector; do
-            test -f "$bin_dir/$binary" || { echo "::error::Missing packaged $binary"; exit 1; }
-            test -x "$bin_dir/$binary" || { echo "::error::Packaged $binary is not executable"; exit 1; }
-            if grep -a -q "diagnostics collector placeholder" "$bin_dir/$binary"; then
-              echo "::error::Packaged diagnostics collector is a placeholder"
-              exit 1
-            fi
-            codesign --verify --verbose "$bin_dir/$binary"
-          done
-          # The OTLP export adapter now ships in customer builds, so the gate
-          # is no longer "the export path is absent". What a customer build
-          # must not be able to do is export the detailed record class, which
-          # is the only class that can carry free text. The compiled policy is
-          # a single constant (export/policy.rs) and it writes itself out two
-          # ways, so both are checked here.
-          #
-          # 1. The marker literal. Exactly one of the two is compiled in, so
-          #    this is a positive statement about the binary rather than an
-          #    absence proof about strings.
-          collector="$bin_dir/proliferate-diagnostics-collector"
-          if ! grep -a -q "PROLIFERATE_EXPORT_POLICY=lifecycle_only" "$collector"; then
-            echo "::error::Packaged collector does not carry the lifecycle-only export policy marker"
-            exit 1
-          fi
-          if grep -a -q "PROLIFERATE_EXPORT_POLICY=all" "$collector"; then
-            echo "::error::Packaged collector was built with internal-dogfood-export; it can export the detailed class"
-            exit 1
-          fi
-          # 2. The binary's own answer. Cheap, and it proves the constant the
-          #    running code reads is the one the grep found. Skipped rather
-          #    than failed if a future matrix entry cross-compiles, because
-          #    then the packaged binary cannot run on the runner.
-          runner_arch="$(uname -m)"
-          case "${{ matrix.target }}" in
-            aarch64-*) target_arch="arm64" ;;
-            x86_64-*) target_arch="x86_64" ;;
-            *) target_arch="" ;;
-          esac
-          if [[ "$runner_arch" == "$target_arch" ]]; then
-            policy="$("$collector" --print-export-policy)"
-            if [[ "$policy" != "lifecycle_only" ]]; then
-              echo "::error::Packaged collector reports export policy '$policy', expected lifecycle_only"
-              exit 1
-            fi
-          else
-            echo "Skipping the collector self-report: ${{ matrix.target }} does not run on $runner_arch."
-          fi
-          # The per-developer export tag is dogfood-only. Its variable name is
-          # a string literal that exists only inside that path, so finding it
-          # in any packaged binary means a customer release carries it.
-          for binary in anyharness proliferate proliferate-worker proliferate-debug proliferate-diagnostics-collector; do
-            if grep -a -q "PROLIFERATE_DIAGNOSTICS_DEV_TAG" "$bin_dir/$binary"; then
-              echo "::error::Packaged $binary carries the internal per-developer export tag"
-              exit 1
-            fi
-          done
-
-      # Added with the single-pass `--bundles app,dmg` cutover. The two-pass
-      # build notarized twice: once for the throwaway `.app` the dmg pass built
-      # and then deleted, and once for the `.app` the updater tarball was made
-      # from — so the DMG payload and the updater payload were two separately
-      # notarized builds of the same commit. One pass makes them the same
-      # stapled bundle. These assertions are the standing proof that the single
-      # notarization actually covered every shipped payload; if a future change
-      # reintroduces a second pass, the counts below stop matching and the
-      # release fails here instead of shipping. Dropping the `app` bundle type
-      # does NOT trip this count — a dmg-only build notarizes its own
-      # throwaway `.app` once, so submits stays 1 — that regression is instead
-      # caught below, by the missing-`.app`-on-disk check and the missing
-      # updater tarball check.
-      - name: Verify macOS notarization and stapling
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        shell: bash
-        env:
-          _SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        run: |
-          # Keyed on the same condition "Build Tauri app" uses to choose its
-          # signed vs. ad-hoc path (`-n "$_SIGNING_IDENTITY"`). A signing
-          # identity with no notary key is a misconfiguration, not a
-          # legitimate skip case, so it must fall through and hard-fail below
-          # on the missing "Notarizing"/"Stapling" log lines rather than
-          # no-op here.
-          if [[ -z "$_SIGNING_IDENTITY" ]]; then
-            echo "No Apple signing identity configured (ad-hoc build); skipping notarization assertions."
-            exit 0
-          fi
-
-          log="$RUNNER_TEMP/tauri-build.log"
-          test -s "$log" || { echo "::error::Missing tauri build log at $log"; exit 1; }
-
-          # tauri-macos-sign 2.3.4 prints exactly one `Notarizing <path>.app`
-          # immediately before each `xcrun notarytool submit`, and exactly one
-          # `Stapling app...` after each accepted submission.
-          submits=$(grep -cE 'Notarizing .*\.app$' "$log" || true)
-          staples=$(grep -cE 'Stapling app\.\.\.' "$log" || true)
-          echo "notarytool submissions=$submits staplings=$staples"
-          [[ "$submits" == "1" ]] || { echo "::error::Expected exactly 1 notarization round trip, saw $submits"; exit 1; }
-          [[ "$staples" == "1" ]] || { echo "::error::Expected exactly 1 stapling, saw $staples"; exit 1; }
-
-          base="target/${{ matrix.target }}/release/bundle"
-
-          # Explicit `|| return 1` on every command: bash suppresses errexit
-          # inside a function body when the call site is part of a `||` list
-          # (the DMG check below is), so a bare command's failure would
-          # otherwise be swallowed and only the last command's status would
-          # surface.
-          assert_notarized() {
-            echo "--- $2: $1"
-            xcrun stapler validate "$1" || return 1
-            spctl --assess --verbose=4 --type execute "$1" || return 1
-          }
-
-          # 1. The bundle left on disk. This is the one the updater tarball was
-          #    made from and the one copied into the DMG.
-          app=$(find "$base/macos" -maxdepth 1 -type d -name '*.app' | head -n 1)
-          [[ -n "$app" ]] || { echo "::error::No .app bundle on disk"; exit 1; }
-          assert_notarized "$app" "built .app"
-
-          # 2. The .app actually inside the DMG customers download.
-          dmg=$(compgen -G "$base/dmg/*.dmg" | head -n 1 || true)
-          [[ -n "$dmg" ]] || { echo "::error::No DMG to inspect"; exit 1; }
-          mount_dir=$(mktemp -d)
-          attach_out=$(hdiutil attach "$dmg" -readonly -nobrowse -noautoopen -mountpoint "$mount_dir")
-          echo "$attach_out"
-          # Detaching by device node is more reliable than by mount point: the
-          # mount point is a $TMPDIR path under /var, and hdiutil resolves it
-          # against /private/var, which intermittently comes back as "No such
-          # file or directory" even while the volume is up (seen in release
-          # run 32457679562).
-          dmg_dev=$(printf '%s\n' "$attach_out" | awk '$1 ~ /^\/dev\// { print $1; exit }')
-          status=0
-          dmg_app=$(find "$mount_dir" -maxdepth 1 -type d -name '*.app' | head -n 1)
-          if [[ -n "$dmg_app" ]]; then
-            assert_notarized "$dmg_app" "DMG-embedded .app" || status=1
-          else
-            echo "::error::DMG contains no .app bundle"
-            status=1
-          fi
-          # Cleanup only. Every assertion above has already been made, so a
-          # stuck volume must never turn a passing gate into a red release:
-          # try the device, then the mount point, then force, then warn. The
-          # retry is worth keeping — Spotlight can hold a fresh volume busy.
-          # Every branch here is an `if`, so the function always reaches its
-          # own `return`; the `|| ::warning::` at the call site below is what
-          # makes a failed detach non-fatal — do not remove it.
-          detach_dmg() {
-            if [[ -n "$dmg_dev" ]] && hdiutil detach "$dmg_dev" -quiet; then return 0; fi
-            if hdiutil detach "$mount_dir" -quiet; then return 0; fi
-            sleep 2
-            if [[ -n "$dmg_dev" ]] && hdiutil detach "$dmg_dev" -force; then return 0; fi
-            if hdiutil detach "$mount_dir" -force; then return 0; fi
-            return 1
-          }
-          detach_dmg || echo "::warning::Could not detach $dmg (dev ${dmg_dev:-unknown}); leaving it mounted. The notarization assertions above already ran."
-          [[ "$status" == "0" ]] || exit 1
-
-          # 3. The .app inside the updater tarball. Reported, not enforced:
-          #    whether a stapled ticket survives tar/untar is a property of the
-          #    upstream updater format that predates this change, and the
-          #    updater's own minisign signature is what gates an update.
-          tarball=$(compgen -G "$base/macos/*.app.tar.gz" | head -n 1 || true)
-          [[ -n "$tarball" ]] || { echo "::error::No updater tarball to inspect"; exit 1; }
-          extract=$(mktemp -d)
-          tar -xzf "$tarball" -C "$extract"
-          updater_app=$(find "$extract" -maxdepth 1 -type d -name '*.app' | head -n 1)
-          [[ -n "$updater_app" ]] || { echo "::error::Updater tarball contains no .app"; exit 1; }
-          echo "--- updater tarball .app: $updater_app"
-          xcrun stapler validate "$updater_app" || echo "::warning::Updater tarball .app is not stapled after extraction"
-          spctl --assess --verbose=4 --type execute "$updater_app" || echo "::warning::Updater tarball .app failed offline Gatekeeper assessment"
-          # The extracted bundle is another ~700MB next to an already-large
-          # target/ tree; drop it before the artifact upload steps run.
-          rm -rf "$extract"
-
-      - name: Upload native Sentry debug files
-        if: steps.filter.outputs.skip != 'true'
-        working-directory: apps/desktop
-        shell: bash
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
-          SENTRY_URL: ${{ vars.SENTRY_URL }}
-          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
-          SENTRY_DESKTOP_NATIVE_PROJECT: ${{ vars.SENTRY_DESKTOP_NATIVE_PROJECT }}
-          SENTRY_ANYHARNESS_PROJECT: ${{ vars.SENTRY_ANYHARNESS_PROJECT }}
-        run: |
-          upload_debug_files() {
-            local project="$1"
-            local label="$2"
-            if [[ -z "$SENTRY_AUTH_TOKEN" || -z "$SENTRY_ORG" || -z "$project" ]]; then
-              echo "Skipping $label debug file upload; Sentry upload env is incomplete."
-              return 0
-            fi
-            pnpm exec sentry-cli debug-files upload \
-              --org "$SENTRY_ORG" \
-              --project "$project" \
-              "../../target/${{ matrix.target }}/release"
-          }
-
-          upload_debug_files "${SENTRY_DESKTOP_NATIVE_PROJECT:-$SENTRY_PROJECT}" "desktop native"
-          upload_debug_files "${SENTRY_ANYHARNESS_PROJECT:-$SENTRY_PROJECT}" "AnyHarness sidecar"
-
-      - name: Verify updater artifacts
-        if: steps.filter.outputs.skip != 'true'
-        working-directory: apps/desktop
-        shell: bash
-        run: |
-          base="../../target/${{ matrix.target }}/release/bundle"
-          find "$base" -type f | sort
-
-          if [[ "${{ matrix.runner_os }}" == "macos" ]]; then
-            compgen -G "$base/dmg/*.dmg" > /dev/null || { echo "::error::Missing macOS DMG"; exit 1; }
-            compgen -G "$base/macos/*.app.tar.gz" > /dev/null || { echo "::error::Missing macOS updater tarball"; exit 1; }
-            compgen -G "$base/macos/*.app.tar.gz.sig" > /dev/null || { echo "::error::Missing macOS updater signature"; exit 1; }
-
-            # DMG styling lives in a .DS_Store written by the Finder AppleScript
-            # during bundling. Tauri skips that script when CI=true unless
-            # TAURI_BUNDLER_DMG_IGNORE_CI=true, so assert it actually landed to
-            # keep the unstyled-DMG regression from ever shipping again (PRO-110).
-            dmg=$(compgen -G "$base/dmg/*.dmg" | head -n 1 || true)
-            mount_dir=$(mktemp -d)
-            attach_out=$(hdiutil attach "$dmg" -readonly -nobrowse -noautoopen -mountpoint "$mount_dir")
-            echo "$attach_out"
-            # Detaching by device node is more reliable than by mount point:
-            # the mount point is a $TMPDIR path under /var, and hdiutil
-            # resolves it against /private/var, which intermittently comes
-            # back as "No such file or directory" even while the volume is up
-            # (seen in release run 32457679562). Duplicated verbatim from the
-            # "Verify macOS notarization and stapling" step's detach_dmg —
-            # each `run:` block is its own shell, so functions/vars cannot be
-            # shared between steps.
-            dmg_dev=$(printf '%s\n' "$attach_out" | awk '$1 ~ /^\/dev\// { print $1; exit }')
-            styling_ok=true
-            [[ -f "$mount_dir/.DS_Store" ]] || styling_ok=false
-            # Cleanup only. The styling assertion above has already been made,
-            # so a stuck volume must never turn a passing gate into a red
-            # release: try the device, then the mount point, then force, then
-            # warn. Every branch here is an `if`, so the function always
-            # reaches its own `return`; the `|| ::warning::` at the call site
-            # below is what makes a failed detach non-fatal — do not remove it.
-            detach_dmg() {
-              if [[ -n "$dmg_dev" ]] && hdiutil detach "$dmg_dev" -quiet; then return 0; fi
-              if hdiutil detach "$mount_dir" -quiet; then return 0; fi
-              sleep 2
-              if [[ -n "$dmg_dev" ]] && hdiutil detach "$dmg_dev" -force; then return 0; fi
-              if hdiutil detach "$mount_dir" -force; then return 0; fi
-              return 1
-            }
-            detach_dmg || echo "::warning::Could not detach $dmg (dev ${dmg_dev:-unknown}); leaving it mounted. The styling assertion above already ran."
-            $styling_ok || { echo "::error::DMG has no .DS_Store — Finder styling was skipped (see PRO-110)"; exit 1; }
-          else
-            compgen -G "$base/nsis/*-setup.exe" > /dev/null || { echo "::error::Missing Windows NSIS installer"; exit 1; }
-            compgen -G "$base/nsis/*-setup.exe.sig" > /dev/null || { echo "::error::Missing Windows updater signature"; exit 1; }
-          fi
-
-      - name: Normalize updater artifact names (macOS)
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        working-directory: apps/desktop
-        shell: bash
-        run: |
-          base="../../target/${{ matrix.target }}/release/bundle/macos"
-          version="${PROLIFERATE_RELEASE_VERSION}"
-
-          if [[ "${{ matrix.target }}" == "aarch64-apple-darwin" ]]; then
-            suffix="aarch64"
-          else
-            suffix="x64"
-          fi
-
-          archive_src=$(find "$base" -maxdepth 1 -type f -name '*.app.tar.gz' ! -name '*_*.app.tar.gz' | head -n 1)
-          sig_src=$(find "$base" -maxdepth 1 -type f -name '*.app.tar.gz.sig' ! -name '*_*.app.tar.gz.sig' | head -n 1)
-
-          [[ -n "$archive_src" ]] || { echo "::error::Missing source updater archive"; exit 1; }
-          [[ -n "$sig_src" ]] || { echo "::error::Missing source updater signature"; exit 1; }
-
-          archive_dst="$base/Proliferate_${version}_${suffix}.app.tar.gz"
-          sig_dst="$archive_dst.sig"
-
-          mv "$archive_src" "$archive_dst"
-          mv "$sig_src" "$sig_dst"
-
-          echo "Normalized updater archive to $(basename "$archive_dst")"
-          echo "Normalized updater signature to $(basename "$sig_dst")"
-
-      - name: Normalize installer artifact names (macOS)
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        working-directory: apps/desktop
-        shell: bash
-        run: |
-          base="../../target/${{ matrix.target }}/release/bundle/dmg"
-          version="${PROLIFERATE_RELEASE_VERSION}"
-
-          if [[ "${{ matrix.target }}" == "aarch64-apple-darwin" ]]; then
-            suffix="aarch64"
-          else
-            suffix="x64"
-          fi
-
-          dmg_src=$(find "$base" -maxdepth 1 -type f -name '*.dmg' | head -n 1)
-          [[ -n "$dmg_src" ]] || { echo "::error::Missing source DMG installer"; exit 1; }
-
-          dmg_dst="$base/Proliferate_${version}_${suffix}.dmg"
-          if [[ "$dmg_src" != "$dmg_dst" ]]; then
-            mv "$dmg_src" "$dmg_dst"
-          fi
-
-          echo "Normalized DMG installer to $(basename "$dmg_dst")"
-
-      - name: Verify normalized updater artifact names (macOS)
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        working-directory: apps/desktop
-        shell: bash
-        run: |
-          base="../../target/${{ matrix.target }}/release/bundle/macos"
-          dmg_base="../../target/${{ matrix.target }}/release/bundle/dmg"
-          if [[ "${{ matrix.target }}" == "aarch64-apple-darwin" ]]; then
-            suffix="aarch64"
-          else
-            suffix="x64"
-          fi
-
-          compgen -G "$dmg_base/*_${suffix}.dmg" > /dev/null || { echo "::error::Missing normalized macOS DMG"; exit 1; }
-          compgen -G "$base/*_${suffix}.app.tar.gz" > /dev/null || { echo "::error::Missing normalized macOS updater tarball"; exit 1; }
-          compgen -G "$base/*_${suffix}.app.tar.gz.sig" > /dev/null || { echo "::error::Missing normalized macOS updater signature"; exit 1; }
-
-      - name: Stage release artifacts (macOS)
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        working-directory: apps/desktop
-        shell: bash
-        run: |
-          stage="../../target/${{ matrix.target }}/release/release-artifacts"
-          rm -rf "$stage"
-          mkdir -p "$stage"
-
-          cp ../../target/${{ matrix.target }}/release/bundle/dmg/*.dmg "$stage/"
-          cp ../../target/${{ matrix.target }}/release/bundle/macos/*_*.app.tar.gz "$stage/"
-          cp ../../target/${{ matrix.target }}/release/bundle/macos/*_*.app.tar.gz.sig "$stage/"
-
-          find "$stage" -maxdepth 1 -type f | sort
-
-      - name: Upload build artifacts (macOS)
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+          set -euo pipefail
+          umask 077
+          test -n "$APPLE_API_KEY_CONTENT" && test -n "$APPLE_API_KEY" && test -n "$APPLE_API_ISSUER"
+          printf '%s' "$APPLE_API_KEY_CONTENT" > "$RUNNER_TEMP/foundation-notary.p8"
+          xcrun notarytool submit "$RUNNER_TEMP/Proliferate-notary.zip" --key "$RUNNER_TEMP/foundation-notary.p8" --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" --wait --timeout 20m --output-format json > "$RUNNER_TEMP/notary-result.json"
+          python3 -c 'import json,os; assert json.load(open(os.environ["RUNNER_TEMP"]+"/notary-result.json"))["status"]=="Accepted"'
+          xcrun stapler staple "$BUILT_APP"
+          xcrun stapler validate "$BUILT_APP"
+          codesign --verify --deep --strict --verbose=2 "$BUILT_APP"
+          spctl --assess --type execute --verbose=4 "$BUILT_APP"
+          mkdir -p "$RUNNER_TEMP/qualification"
+          ditto -c -k --keepParent "$BUILT_APP" "$RUNNER_TEMP/qualification/Proliferate-staging-arm64.zip"
+          python3 - <<'PYCODE'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          artifact=root/'qualification/Proliferate-staging-arm64.zip'
+          receipt={'source_revision':os.environ['RELEASE'],'source_archive_sha256':os.environ['SOURCE_SHA256'],
+            'environment':'staging','architecture':'arm64','artifact_sha256':hashlib.sha256(artifact.read_bytes()).hexdigest(),
+            'notarization':json.loads((root/'notary-result.json').read_text()),'installed_oauth_qualified':False}
+          (root/'qualification/receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
+          PYCODE
+      - name: Retain signed candidate and verification receipt
+        uses: actions/upload-artifact@v4
         with:
-          name: desktop-${{ matrix.target }}
-          path: |
-            target/${{ matrix.target }}/release/release-artifacts/*
+          name: foundation-desktop-${{ env.RELEASE }}
+          path: ${{ runner.temp }}/qualification/
           if-no-files-found: error
-          compression-level: 0
-
-      - name: Upload DMG-only artifact (macOS)
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: proliferate-dmg-${{ matrix.target }}
-          path: |
-            target/${{ matrix.target }}/release/release-artifacts/*.dmg
-          if-no-files-found: error
-          compression-level: 0
-
-      # Restored from 3d3c0504b8. There is no name-normalization step on this
-      # path: the updater and installer manifests match Tauri's own NSIS output
-      # name, which already carries the x64 arch token.
-      - name: Upload build artifacts (Windows)
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'windows'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: desktop-${{ matrix.target }}
-          path: |
-            target/${{ matrix.target }}/release/bundle/**/*.msi
-            target/${{ matrix.target }}/release/bundle/**/*-setup.exe
-            target/${{ matrix.target }}/release/bundle/**/*-setup.exe.sig
-          if-no-files-found: error
-          compression-level: 0
-
-  create-release:
-    needs: build-desktop
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || (github.event_name != 'push' && !inputs.dry_run)
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.git_sha || github.ref }}
-
-      - name: Validate release ref
-        if: github.event_name == 'workflow_dispatch' && !inputs.git_sha
-        shell: bash
+          retention-days: 7
+      - name: Remove signing material
+        if: always()
         run: |
-          if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != desktop-v* ]]; then
-            echo "::error::Manual non-dry-run desktop releases must run from a desktop-v* tag ref, not ${GITHUB_REF_TYPE}:${GITHUB_REF_NAME}."
-            exit 1
-          fi
-
-      - name: Ensure desktop release tag exists
-        if: ${{ !startsWith(github.ref_name, 'desktop-v') }}
-        env:
-          RELEASE_TAG: ${{ format('desktop-v{0}', inputs.version) }}
-        run: |
-          set -euo pipefail
-          release_target="$(git rev-parse HEAD)"
-          remote_tags="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}" || true)"
-          existing_target="$(
-            printf '%s\n' "$remote_tags" \
-              | awk '$2 ~ /\^\{\}$/ { peeled=$1 } $2 !~ /\^\{\}$/ && $2 != "" { direct=$1 } END { print peeled ? peeled : direct }'
-          )"
-
-          if [[ -n "$existing_target" ]]; then
-            if [[ "$existing_target" != "$release_target" ]]; then
-              echo "::error::Desktop tag $RELEASE_TAG already exists at $existing_target, not $release_target."
-              exit 1
-            fi
-            echo "Desktop tag $RELEASE_TAG already exists at $release_target."
-            exit 0
-          fi
-
-          git tag "$RELEASE_TAG" "$release_target"
-          git push origin "refs/tags/$RELEASE_TAG"
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: all-artifacts
-          pattern: desktop-*
-          # merge-multiple keeps the extracted layout deterministic: with
-          # `false`, download-artifact@v8 nests each artifact in its own
-          # directory ONLY when two or more artifacts match — a single match
-          # (ARM-only, since Intel is paused) extracts flat and broke the
-          # 0.4.22 publish. Merged-flat is the one layout every artifact
-          # count produces.
-          merge-multiple: true
-
-      - name: List artifacts
-        run: find all-artifacts -type f | sort
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          name: Proliferate Desktop ${{ startsWith(github.ref_name, 'desktop-v') && github.ref_name || format('desktop-v{0}', inputs.version) }}
-          draft: true
-          generate_release_notes: true
-          target_commitish: ${{ inputs.git_sha || github.sha }}
-          tag_name: ${{ startsWith(github.ref_name, 'desktop-v') && github.ref_name || format('desktop-v{0}', inputs.version) }}
-          files: all-artifacts/**/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  publish-updater:
-    needs: [build-desktop, create-release]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || (github.event_name != 'push' && !inputs.dry_run && inputs.publish_updater)
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.git_sha || github.ref }}
-
-      - name: Setup Node 22
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "22"
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: all-artifacts
-          pattern: desktop-*
-          # merge-multiple keeps the extracted layout deterministic: with
-          # `false`, download-artifact@v8 nests each artifact in its own
-          # directory ONLY when two or more artifacts match — a single match
-          # (ARM-only, since Intel is paused) extracts flat and broke the
-          # 0.4.22 publish. Merged-flat is the one layout every artifact
-          # count produces.
-          merge-multiple: true
-
-      - name: List artifacts
-        run: find all-artifacts -type f | sort
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
-        with:
-          role-to-assume: ${{ vars.AWS_DESKTOP_RELEASE_ROLE_ARN }}
-          aws-region: us-east-1
-
-      - name: Generate updater manifest
-        env:
-          INPUT_VERSION: ${{ inputs.version || '' }}
-          RELEASE_TITLE: ${{ inputs.release_title || '' }}
-        run: |
-          version="$INPUT_VERSION"
-          if [[ "${GITHUB_REF_NAME:-}" == desktop-v* ]]; then
-            version="${GITHUB_REF_NAME#desktop-v}"
-          fi
-          : "${version:?Missing desktop release version.}"
-          echo "DESKTOP_RELEASE_VERSION=$version" >> "$GITHUB_ENV"
-          node scripts/generate-updater-manifest.mjs \
-            --version "$version" \
-            --artifacts-dir all-artifacts \
-            --base-url "${{ vars.DESKTOP_DOWNLOADS_BASE_URL }}/desktop/stable" \
-            --notes "$RELEASE_TITLE" \
-            --output latest.json
-
-      - name: Generate installer manifest
-        env:
-          INPUT_VERSION: ${{ inputs.version || '' }}
-        run: |
-          version="$INPUT_VERSION"
-          if [[ "${GITHUB_REF_NAME:-}" == desktop-v* ]]; then
-            version="${GITHUB_REF_NAME#desktop-v}"
-          fi
-          : "${version:?Missing desktop release version.}"
-          node scripts/generate-desktop-installer-manifest.mjs \
-            --version "$version" \
-            --artifacts-dir all-artifacts \
-            --base-url "${{ vars.DESKTOP_DOWNLOADS_BASE_URL }}/desktop/stable" \
-            --output installers.json
-
-      - name: Refuse an existing immutable updater manifest
-        run: |
-          set -euo pipefail
-          BUCKET="${{ vars.DESKTOP_DOWNLOADS_S3_BUCKET }}"
-          : "${DESKTOP_RELEASE_VERSION:?Missing desktop release version.}"
-          VERSIONED_KEY="desktop/stable/${DESKTOP_RELEASE_VERSION}/latest.json"
-
-          if head_error="$(aws s3api head-object --bucket "${BUCKET}" --key "${VERSIONED_KEY}" 2>&1)"; then
-            echo "::error::s3://${BUCKET}/${VERSIONED_KEY} already exists. Same-version publishes are refused before any updater asset or rolling manifest is changed."
-            exit 1
-          fi
-
-          if [[ "$head_error" != *"(404)"* ]]; then
-            echo "$head_error" >&2
-            echo "::error::Could not prove that s3://${BUCKET}/${VERSIONED_KEY} is absent; refusing to publish."
-            exit 1
-          fi
-
-      - name: Upload desktop assets to S3
-        run: |
-          BUCKET="${{ vars.DESKTOP_DOWNLOADS_S3_BUCKET }}"
-          find all-artifacts -type f \( \
-            -name "*.dmg" -o \
-            -name "*.app.tar.gz" -o \
-            -name "*.app.tar.gz.sig" -o \
-            -name "*-setup.exe" -o \
-            -name "*-setup.exe.sig" \
-          \) -print0 | while IFS= read -r -d '' file; do
-            aws s3 cp "$file" "s3://${BUCKET}/desktop/stable/$(basename "$file")"
-          done
-
-      - name: Upload manifest to S3
-        run: |
-          set -euo pipefail
-          BUCKET="${{ vars.DESKTOP_DOWNLOADS_S3_BUCKET }}"
-          # Versioned snapshot the self-hosted server's /desktop/updater/latest.json
-          # 302-redirects to (desktop/stable/<version>/latest.json). Immutable, so
-          # cache it long and skip CloudFront invalidation. Create it atomically
-          # before changing the rolling feed so same-version or concurrent runs
-          # cannot make the two manifests disagree.
-          : "${DESKTOP_RELEASE_VERSION:?Missing desktop release version.}"
-          VERSIONED_KEY="desktop/stable/${DESKTOP_RELEASE_VERSION}/latest.json"
-          if ! aws s3api put-object \
-            --bucket "${BUCKET}" \
-            --key "${VERSIONED_KEY}" \
-            --body latest.json \
-            --content-type "application/json" \
-            --cache-control "max-age=31536000, immutable" \
-            --if-none-match "*"; then
-            echo "::error::Failed to create s3://${BUCKET}/${VERSIONED_KEY} atomically. The rolling updater manifest was not changed."
-            exit 1
-          fi
-          aws s3 cp latest.json \
-            "s3://${BUCKET}/desktop/stable/latest.json" \
-            --content-type "application/json" \
-            --cache-control "max-age=300"
-          aws s3 cp installers.json \
-            "s3://${BUCKET}/desktop/stable/installers.json" \
-            --content-type "application/json" \
-            --cache-control "max-age=300"
-
-      - name: Invalidate CloudFront cache
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id "${{ vars.DESKTOP_CLOUDFRONT_DISTRIBUTION_ID }}" \
-            --paths "/desktop/stable/latest.json" "/desktop/stable/installers.json"
-
-      - name: Bump Homebrew cask
-        env:
-          # contents:write PAT/App token scoped to the tap repo only. When unset
-          # (e.g. before the tap exists) this step no-ops instead of failing.
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO || 'proliferate-ai/homebrew-tap' }}
-          INPUT_VERSION: ${{ inputs.version || '' }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${HOMEBREW_TAP_TOKEN:-}" ]]; then
-            echo "::warning::HOMEBREW_TAP_TOKEN not set; skipping Homebrew cask bump."
-            exit 0
-          fi
-
-          version="$INPUT_VERSION"
-          if [[ "${GITHUB_REF_NAME:-}" == desktop-v* ]]; then
-            version="${GITHUB_REF_NAME#desktop-v}"
-          fi
-          : "${version:?Missing desktop release version.}"
-
-          # Compute sha256 from the build artifacts we just shipped (not the CDN,
-          # to avoid propagation races and verify the exact bytes published).
-          dmg_aarch64=$(find all-artifacts -type f -name "Proliferate_${version}_aarch64.dmg" | head -n 1)
-          dmg_x64=$(find all-artifacts -type f -name "Proliferate_${version}_x64.dmg" | head -n 1)
-          [[ -n "$dmg_aarch64" ]] || { echo "::error::Missing aarch64 DMG for cask bump"; exit 1; }
-          if [[ -z "$dmg_x64" ]]; then
-            # Intel builds paused 2026-08-20 (see build-desktop matrix): the cask
-            # format is a single universal formula requiring both arches, so
-            # there is no safe partial bump while x86_64 artifacts don't exist.
-            # Skip rather than publish a cask pinned to a stale Intel binary.
-            echo "::warning::No x64 DMG produced (Intel builds paused); skipping Homebrew cask bump until Intel builds resume."
-            exit 0
-          fi
-          sha_aarch64=$(shasum -a 256 "$dmg_aarch64" | awk '{print $1}')
-          sha_x64=$(shasum -a 256 "$dmg_x64" | awk '{print $1}')
-
-          tap_dir="$(mktemp -d)"
-          git clone --depth 1 \
-            "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${HOMEBREW_TAP_REPO}.git" \
-            "$tap_dir"
-
-          mkdir -p "$tap_dir/Casks"
-          node scripts/generate-homebrew-cask.mjs \
-            --version "$version" \
-            --sha-aarch64 "$sha_aarch64" \
-            --sha-x64 "$sha_x64" \
-            --base-url "${{ vars.DESKTOP_DOWNLOADS_BASE_URL }}/desktop/stable" \
-            --desc "Open-source AI IDE for running coding agents in parallel" \
-            --output "$tap_dir/Casks/proliferate.rb"
-
-          cd "$tap_dir"
-          git config user.name "proliferate-release-bot"
-          git config user.email "release-bot@proliferate.com"
-          # Stage first, then diff the index: `git diff` alone ignores untracked
-          # files, so on the tap's first-ever cask it would wrongly report "no
-          # change" and skip the push.
-          git add Casks/proliferate.rb
-          if git diff --cached --quiet; then
-            echo "Cask already up to date at version $version; nothing to push."
-            exit 0
-          fi
-          git commit -m "proliferate ${version}"
-          git push origin HEAD
+          rm -f "$RUNNER_TEMP/foundation-certificate.p12" "$RUNNER_TEMP/foundation-notary.p8"
+          security delete-keychain "$RUNNER_TEMP/foundation-signing.keychain-db" || true
