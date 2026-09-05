@@ -11,9 +11,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE: b5928e63f61dbfd61f62fb8000e67bae9b5f0220
-  SOURCE_SHA256: ac6dc73335048b90f739c57b3c71bfd3038f8aeaddb0971a22e1092f0c337d2d
-  VITE_RELEASE: b5928e63f61dbfd61f62fb8000e67bae9b5f0220
+  RELEASE: 068b8c37660baf66cce956f40ed7d9a6177c9335
+  SOURCE_SHA256: 0643efc4535db7bf21bd15e073f2f6d83f2d1e97ed95b7875a09211747bfbe02
+  VITE_RELEASE: 068b8c37660baf66cce956f40ed7d9a6177c9335
   VITE_ENV: staging
   VITE_TELEMETRY_MODE: prod
   VITE_SHELL: desktop
@@ -55,11 +55,38 @@ jobs:
           workspaces: ${{ runner.temp }}/foundation/client/apps/desktop/src-tauri
           shared-key: foundation-macos-arm64
       - name: Build the exact candidate before loading Apple credentials
+        env:
+          VITE_SENTRY_DSN_CLIENT: ${{ secrets.FOUNDATION_SENTRY_DSN_CLIENT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: proliferate
+          SENTRY_PROJECT: desktop
         run: |
           set -euo pipefail
+          test -n "$VITE_SENTRY_DSN_CLIENT"
+          test -n "$SENTRY_AUTH_TOKEN"
           cd "$SOURCE_DIR"
           pnpm install --frozen-lockfile
-          pnpm --filter @proliferate/desktop exec tauri build --target aarch64-apple-darwin --bundles app
+          VITE_SOURCEMAPS=1 pnpm --filter @proliferate/desktop build
+          pnpm exec sentry-cli sourcemaps inject client/apps/desktop/dist
+          python3 - <<'PYCODE'
+          import json, os
+          from pathlib import Path
+          scripts=list(Path('client/apps/desktop/dist').rglob('*.js'))
+          assert scripts, 'frontend build has no JavaScript'
+          for script in scripts:
+              mapping=Path(str(script)+'.map')
+              assert mapping.is_file(), f'missing source map: {script.name}'
+              record=json.loads(mapping.read_text())
+              debug=record.get('debugId') or record.get('debug_id')
+              assert debug and 'debugId='+debug in script.read_text(), f'unmatched source map: {script.name}'
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write(f'SOURCEMAP_PAIRS={len(scripts)}\n')
+          PYCODE
+          pnpm exec sentry-cli sourcemaps upload --strict --release "$RELEASE" client/apps/desktop/dist
+          find client/apps/desktop/dist -name '*.map' -type f -delete
+          node client/scripts/assert-dist-clean.mjs client/apps/desktop/dist
+          # Compile the already uploaded/injected frontend; the normal hook would rebuild it.
+          pnpm --filter @proliferate/desktop exec tauri build --target aarch64-apple-darwin --bundles app --config '{"build":{"beforeBuildCommand":"pnpm prepare:sidecar"}}'
           app="$SOURCE_DIR/client/apps/desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Proliferate.app"
           test -d "$app"
           echo "BUILT_APP=$app" >> "$GITHUB_ENV"
@@ -71,7 +98,9 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          test -n "$APPLE_CERTIFICATE" && test -n "$APPLE_CERTIFICATE_PASSWORD" && test -n "$KEYCHAIN_PASSWORD"
+          test -n "$APPLE_CERTIFICATE"
+          test -n "$APPLE_CERTIFICATE_PASSWORD"
+          test -n "$KEYCHAIN_PASSWORD"
           keychain="$RUNNER_TEMP/foundation-signing.keychain-db"
           echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/foundation-certificate.p12"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
@@ -86,7 +115,8 @@ jobs:
           SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           set -euo pipefail
-          test -n "$SIGNING_IDENTITY" && test "$SIGNING_IDENTITY" != '-'
+          test -n "$SIGNING_IDENTITY"
+          test "$SIGNING_IDENTITY" != '-'
           cat > "$RUNNER_TEMP/node-entitlements.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -123,7 +153,9 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          test -n "$APPLE_API_KEY_CONTENT" && test -n "$APPLE_API_KEY" && test -n "$APPLE_API_ISSUER"
+          test -n "$APPLE_API_KEY_CONTENT"
+          test -n "$APPLE_API_KEY"
+          test -n "$APPLE_API_ISSUER"
           printf '%s' "$APPLE_API_KEY_CONTENT" > "$RUNNER_TEMP/foundation-notary.p8"
           xcrun notarytool submit "$RUNNER_TEMP/Proliferate-notary.zip" --key "$RUNNER_TEMP/foundation-notary.p8" --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" --wait --timeout 20m --output-format json > "$RUNNER_TEMP/notary-result.json"
           python3 -c 'import json,os; assert json.load(open(os.environ["RUNNER_TEMP"]+"/notary-result.json"))["status"]=="Accepted"'
@@ -140,7 +172,9 @@ jobs:
           artifact=root/'qualification/Proliferate-staging-arm64.zip'
           receipt={'source_revision':os.environ['RELEASE'],'source_archive_sha256':os.environ['SOURCE_SHA256'],
             'environment':'staging','architecture':'arm64','artifact_sha256':hashlib.sha256(artifact.read_bytes()).hexdigest(),
-            'notarization':json.loads((root/'notary-result.json').read_text()),'installed_oauth_qualified':False}
+            'notarization':json.loads((root/'notary-result.json').read_text()),'installed_oauth_qualified':False,
+            'sentry_project':'proliferate/desktop','sourcemaps_uploaded':True,
+            'sourcemap_pairs':int(os.environ['SOURCEMAP_PAIRS']),'served_sourcemaps':False}
           (root/'qualification/receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
           PYCODE
       - name: Retain signed candidate and verification receipt

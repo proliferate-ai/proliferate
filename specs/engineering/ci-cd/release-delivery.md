@@ -3,10 +3,13 @@
 ## Foundation qualification branch
 
 On `codex/foundation-signing`, `release-desktop.yml` temporarily packages the fixed
-foundation candidate `b5928e63f61dbfd61f62fb8000e67bae9b5f0220`. Dispatch verifies
+foundation candidate `068b8c37660baf66cce956f40ed7d9a6177c9335`. Dispatch verifies
 its private source archive checksum, builds before loading signing credentials,
 signs bundled Node before recording its final hash, signs and notarizes the app,
 and retains the signed ZIP plus verification receipt as a private workflow artifact.
+The frontend includes the verified desktop Sentry DSN. Its build must have matching
+injected debug ids and source maps for every JavaScript asset before upload; maps
+are then removed and checked absent before Tauri embeds that same frontend.
 The existing Apple credentials stay in this repository. This branch does not create
 a public release or publish an updater, and its dispatch lane sunsets September 11,
 2026. It is an isolated qualification adapter; the main-branch delivery topology
