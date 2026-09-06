@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Run desktop qualification or seal the existing Sentry token for fixed staging
+        description: Run desktop qualification or seal the existing Sentry token for fixed production
         type: choice
         required: true
         default: sign
@@ -217,7 +217,7 @@ jobs:
           /usr/bin/python3 -c 'import sys; assert sys.version_info[:2] == (3, 12)'
           /usr/bin/python3 -m venv "$RUNNER_TEMP/sentry-seal-venv"
           "$RUNNER_TEMP/sentry-seal-venv/bin/python" -m pip install --disable-pip-version-check --no-input --only-binary=:all: --require-hashes -r scripts/ci-cd/sentry-custody-requirements.txt
-      - name: Seal to the pinned foundation staging environment key
+      - name: Seal to the pinned foundation production environment key
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |

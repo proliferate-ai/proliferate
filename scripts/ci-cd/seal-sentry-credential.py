@@ -17,11 +17,11 @@ SOURCE_REF = "refs/heads/codex/foundation-signing"
 WORKFLOW_REF = SOURCE_REPOSITORY + "/.github/workflows/release-desktop.yml@" + SOURCE_REF
 DESTINATION = {
     "repository": "proliferate-ai/proliferate-next",
-    "environment": "staging",
+    "environment": "production",
     "secret_name": "SENTRY_AUTH_TOKEN",
     "key_id": "3380204578043523366",
 }
-PUBLIC_KEY = "Js7GiBKHNlPwPgJ9vu1nlFvmwctyChO1tyA5gztzUXw="
+PUBLIC_KEY = "QfCOjg2wHZBu7ROwU0wOkpKK2jE4F6MGRYU7oKccYgA="
 SUNSET = datetime(2026, 9, 12, tzinfo=UTC)
 
 
@@ -102,7 +102,7 @@ def main() -> int:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             json.dump(result, stream, separators=(",", ":"))
             stream.write("\n")
-        print("Sealed credential artifact prepared for the fixed staging destination.")
+        print("Sealed credential artifact prepared for the fixed production destination.")
         return 0
     except Exception:
         # Never print arbitrary exception text: a library or runner error may contain secret input.

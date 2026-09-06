@@ -23,7 +23,9 @@ qualification steps and are not asserted by the signing receipt.
 The same registered workflow has a separate `operation=seal-sentry` dispatch choice.
 Its guarded custody job runs only in this repository on the qualification branch,
 skips building/signing/notarization, and seals the existing `SENTRY_AUTH_TOKEN` to
-the reviewed `proliferate-ai/proliferate-next` / `staging` GitHub environment key.
+the reviewed `proliferate-ai/proliferate-next` / `production` GitHub environment key.
+Staging custody is already configured; this reviewed revision pins production's
+separate environment key. It does not accept an arbitrary destination.
 `operation=sign` remains the default. Destination, secret name and public key are
 fixed in `scripts/ci-cd/seal-sentry-credential.py`; none is a dispatch input. The
 job installs only hash-pinned PyNaCl dependencies before loading the token and

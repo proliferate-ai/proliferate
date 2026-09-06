@@ -68,7 +68,7 @@ class CustodyTests(unittest.TestCase):
         self.assertEqual(result["destination"]["key_id"], "3380204578043523366")
         self.assertIsInstance(result["destination"]["key_id"], str)
         self.assertEqual(result["destination"]["repository"], "proliferate-ai/proliferate-next")
-        self.assertEqual(result["destination"]["environment"], "staging")
+        self.assertEqual(result["destination"]["environment"], "production")
         self.assertEqual(result["destination"]["secret_name"], "SENTRY_AUTH_TOKEN")
         self.assertEqual(result["source"]["sha"], SHA)
         self.assertNotIn("synthetic-not-an-actual-token", json.dumps(result))
