@@ -669,3 +669,11 @@ pipeline = "dispatch-with-sunset"
 cadence = "fixed foundation candidate qualification; isolated branch only"
 sunset = "2026-09-11"
 gate_mirrored = false
+
+[[lane]]
+workflow = "release-desktop.yml"
+job = "seal-sentry"
+pipeline = "dispatch-with-sunset"
+cadence = "fixed staging credential custody; isolated foundation branch only"
+sunset = "2026-09-11"
+gate_mirrored = false
