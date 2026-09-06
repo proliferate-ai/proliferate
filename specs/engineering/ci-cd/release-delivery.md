@@ -10,11 +10,36 @@ and retains the signed ZIP plus verification receipt as a private workflow artif
 The frontend includes the verified desktop Sentry DSN. Its build must have matching
 injected debug ids and source maps for every JavaScript asset before upload; maps
 are then removed and checked absent before Tauri embeds that same frontend.
+The signing build also requires the pilot PostHog project key from repository
+secret `PILOT_POSTHOG_KEY` and ingestion host from repository variable
+`PILOT_POSTHOG_HOST`, exposed only to that step as `VITE_POSTHOG_KEY` and
+`VITE_POSTHOG_HOST`. Both must be present before the qualifying build starts.
 The existing Apple credentials stay in this repository. This branch does not create
 a public release or publish an updater, and its dispatch lane sunsets September 11,
 2026. It is an isolated qualification adapter; the main-branch delivery topology
 below is unchanged. Installed OAuth and subsequent-version replacement are separate
 qualification steps and are not asserted by the signing receipt.
+
+The same registered workflow has a separate `operation=seal-sentry` dispatch choice.
+Its guarded custody job runs only in this repository on the qualification branch,
+skips building/signing/notarization, and seals the existing `SENTRY_AUTH_TOKEN` to
+the reviewed `proliferate-ai/proliferate-next` / `staging` GitHub environment key.
+`operation=sign` remains the default. Destination, secret name and public key are
+fixed in `scripts/ci-cd/seal-sentry-credential.py`; none is a dispatch input. The
+job installs only hash-pinned PyNaCl dependencies before loading the token and
+uploads one sealed JSON receipt with one-day retention. It never exports plaintext,
+mints credentials, writes to the destination, or grants a cross-repository PAT.
+The adapter refuses at September 12, 2026 00:00 UTC, after the qualification window.
+
+The operator checks the reviewed source/workflow SHA, exact successful custody job,
+run/attempt and artifact against GitHub before importing; sealed-box encryption
+does not authenticate a sender. The operator re-reads the exact destination key
+before dispatch and before writing `encrypted_value` with the string `key_id` to
+that same environment/secret endpoint. A rotated key requires resealing; it cannot
+be replaced from artifact claims. A successful secret write is configuration only;
+real source-map upload and symbolication require their own qualification. Synthetic
+round-trip, tamper, owner/revision/refusal, generic-error and file-custody proof is
+in `scripts/ci-cd/test_seal_sentry_credential.py`.
 
 Expands: [README.md#5--the-cd-line](README.md#5--the-cd-line)
 

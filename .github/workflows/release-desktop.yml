@@ -2,6 +2,13 @@ name: Foundation Desktop Qualification
 
 on:
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Run desktop qualification or seal the existing Sentry token for fixed staging
+        type: choice
+        required: true
+        default: sign
+        options: [sign, seal-sentry]
 
 permissions:
   contents: read
@@ -21,7 +28,7 @@ env:
 
 jobs:
   sign:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/foundation-signing'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/foundation-signing' && inputs.operation == 'sign'
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -57,12 +64,16 @@ jobs:
       - name: Build the exact candidate before loading Apple credentials
         env:
           VITE_SENTRY_DSN_CLIENT: ${{ secrets.FOUNDATION_SENTRY_DSN_CLIENT }}
+          VITE_POSTHOG_KEY: ${{ secrets.PILOT_POSTHOG_KEY }}
+          VITE_POSTHOG_HOST: ${{ vars.PILOT_POSTHOG_HOST }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: proliferate
           SENTRY_PROJECT: desktop
         run: |
           set -euo pipefail
           test -n "$VITE_SENTRY_DSN_CLIENT"
+          test -n "$VITE_POSTHOG_KEY"
+          test -n "$VITE_POSTHOG_HOST"
           test -n "$SENTRY_AUTH_TOKEN"
           cd "$SOURCE_DIR"
           pnpm install --frozen-lockfile
@@ -189,3 +200,38 @@ jobs:
         run: |
           rm -f "$RUNNER_TEMP/foundation-certificate.p12" "$RUNNER_TEMP/foundation-notary.p8"
           security delete-keychain "$RUNNER_TEMP/foundation-signing.keychain-db" || true
+
+  seal-sentry:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'proliferate-ai/proliferate' && github.ref == 'refs/heads/codex/foundation-signing' && inputs.operation == 'seal-sentry'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1; existing repository pin
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install the isolated pinned encryption dependency before loading the token
+        run: |
+          set -euo pipefail
+          umask 077
+          /usr/bin/python3 -c 'import sys; assert sys.version_info[:2] == (3, 12)'
+          /usr/bin/python3 -m venv "$RUNNER_TEMP/sentry-seal-venv"
+          "$RUNNER_TEMP/sentry-seal-venv/bin/python" -m pip install --disable-pip-version-check --no-input --only-binary=:all: --require-hashes -r scripts/ci-cd/sentry-custody-requirements.txt
+      - name: Seal to the pinned foundation staging environment key
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          umask 077
+          "$RUNNER_TEMP/sentry-seal-venv/bin/python" scripts/ci-cd/seal-sentry-credential.py
+      - name: Retain only the sealed credential and exact run receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1; existing repository pin
+        with:
+          name: foundation-sentry-custody-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sentry-custody/sealed.json
+          if-no-files-found: error
+          retention-days: 1
+      - name: Remove temporary custody artifacts
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/sentry-custody" "$RUNNER_TEMP/sentry-seal-venv"
