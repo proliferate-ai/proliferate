@@ -677,3 +677,11 @@ pipeline = "dispatch-with-sunset"
 cadence = "fixed staging credential custody; isolated foundation branch only"
 sunset = "2026-09-11"
 gate_mirrored = false
+
+[[lane]]
+workflow = "release-desktop.yml"
+job = "seal-vercel"
+pipeline = "dispatch-with-sunset"
+cadence = "fixed production Vercel credential custody; isolated foundation branch only"
+sunset = "2026-09-11"
+gate_mirrored = false

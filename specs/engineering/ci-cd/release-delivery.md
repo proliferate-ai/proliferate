@@ -43,6 +43,19 @@ real source-map upload and symbolication require their own qualification. Synthe
 round-trip, tamper, owner/revision/refusal, generic-error and file-custody proof is
 in `scripts/ci-cd/test_seal_sentry_credential.py`.
 
+
+`operation=seal-vercel` uses the old repository's `staging` environment deployment
+credential. Before sealing, it must read the exact foundation staging and new
+production projects in Pablo's verified Vercel team. Either denied read, a different
+project/team, a redirect or a provider failure prevents artifact creation. The fixed
+recipient is the new repository's production `VERCEL_TOKEN`; the same pinned key,
+owner/revision/expiry checks and encrypted-only custody rules apply. Its source
+receipt additionally records the owning staging environment and both verified
+project IDs. It does not copy a personal CLI login or claim a deployment occurred.
+The script and synthetic provider/custody tests are
+`scripts/ci-cd/seal-vercel-credential.py` and
+`scripts/ci-cd/test_seal_vercel_credential.py`.
+
 Expands: [README.md#5--the-cd-line](README.md#5--the-cd-line)
 
 Delivery owns the repository's artifact identities and the topology that builds, deploys, promotes, and publishes them. It describes what the checked-in automation does **today**; the ruled direction it converges toward (continuous staging, one artifact base, deliberate prod promote) is [pipelines.md](pipelines.md). Operator steps live in [Developing: Deploying](../../../guides/deploying/README.md).
