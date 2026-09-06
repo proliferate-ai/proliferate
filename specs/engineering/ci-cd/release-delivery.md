@@ -20,6 +20,29 @@ a public release or publish an updater, and its dispatch lane sunsets September 
 below is unchanged. Installed OAuth and subsequent-version replacement are separate
 qualification steps and are not asserted by the signing receipt.
 
+`target_environment` selects exactly `staging` (the default) or `prod` for the
+signing operation. The fixed API origins are `https://api-staging.proliferate.com`
+and `https://api.proliferate.com`. Preflight requires the environment, origin,
+source release and desktop telemetry mode to agree; the packaged runtime manifest
+is checked against the same inputs. The receipt records environment and API origin.
+The artifact is `foundation-desktop-<environment>-<source SHA>` and contains
+`Proliferate-<environment>-arm64.zip`; staging and production bytes are qualified
+separately even when their source SHA matches. Both reuse the existing desktop
+Sentry project and capture-only PostHog inputs; the shared client records explicit
+environment/release on each vendor path. Custody operations ignore this selector
+and retain their fixed destination, operation and expiration rules.
+
+Qualification uses one installed app. Retain the signed staging ZIP before replacing
+the installed `Proliferate.app` with the production artifact. Both retain the same
+bundle ID and deep-link scheme, so they are not a side-by-side channel setup.
+Accounts credentials, pending operations and installation identity are API-origin
+scoped; replacing the app does not copy staging login authority to
+production. Installed production provider return, restoration, sign-out and diagnostic
+receipts are separate operator observations after production becomes available.
+Synthetic environment/manifest/receipt checks run with
+`python3 scripts/ci-cd/test_foundation_desktop_environment.py`.
+
+
 The same registered workflow has a separate `operation=seal-sentry` dispatch choice.
 Its guarded custody job runs only in this repository on the qualification branch,
 skips building/signing/notarization, and seals the existing `SENTRY_AUTH_TOKEN` to

@@ -9,6 +9,12 @@ on:
         required: true
         default: sign
         options: [sign, seal-sentry, seal-vercel]
+      target_environment:
+        description: API environment for the signed desktop; custody operations ignore this choice
+        type: choice
+        required: true
+        default: staging
+        options: [staging, prod]
 
 permissions:
   contents: read
@@ -21,10 +27,10 @@ env:
   RELEASE: 299f438fbec4f80f1169bdacb2acb080f1d1e05c
   SOURCE_SHA256: 60d066fa625eafff4d916a86d932a26f51a6eeb393642729831b2813f023a264
   VITE_RELEASE: 299f438fbec4f80f1169bdacb2acb080f1d1e05c
-  VITE_ENV: staging
+  VITE_ENV: ${{ inputs.target_environment || 'staging' }}
   VITE_TELEMETRY_MODE: prod
   VITE_SHELL: desktop
-  VITE_API_URL: https://api-staging.proliferate.com
+  VITE_API_URL: ${{ inputs.target_environment == 'prod' && 'https://api.proliferate.com' || 'https://api-staging.proliferate.com' }}
 
 jobs:
   sign:
@@ -35,6 +41,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Verify the fixed desktop environment
+        run: |
+          set -euo pipefail
+          python3 - <<'PYCODE'
+          import os
+          origins={'staging':'https://api-staging.proliferate.com','prod':'https://api.proliferate.com'}
+          expected=origins.get(os.environ['VITE_ENV'])
+          assert expected and os.environ['VITE_API_URL']==expected, 'desktop environment/API mismatch'
+          assert os.environ['VITE_RELEASE']==os.environ['RELEASE'], 'desktop source release mismatch'
+          assert os.environ['VITE_SHELL']=='desktop' and os.environ['VITE_TELEMETRY_MODE']=='prod'
+          PYCODE
       - name: Fetch the fixed reviewed source archive
         env:
           SOURCE_URL: ${{ secrets.FOUNDATION_SOURCE_URL }}
@@ -146,8 +163,8 @@ jobs:
           resources=app/'Contents/Resources/runtime'
           manifest=resources/'manifest.json'
           record=json.loads(manifest.read_text())
-          assert record['release']==os.environ['RELEASE'] and record['env']=='staging'
-          assert record['serverOrigin']=='https://api-staging.proliferate.com'
+          assert record['release']==os.environ['RELEASE'] and record['env']==os.environ['VITE_ENV']
+          assert record['serverOrigin']==os.environ['VITE_API_URL']
           assert record['runtimeSha256']==hashlib.sha256((resources/'anyharness.mjs').read_bytes()).hexdigest()
           record['nodeSha256']=hashlib.sha256((resources/'node').read_bytes()).hexdigest()
           manifest.write_text(json.dumps(record,indent=2)+'\n')
@@ -175,14 +192,14 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$BUILT_APP"
           spctl --assess --type execute --verbose=4 "$BUILT_APP"
           mkdir -p "$RUNNER_TEMP/qualification"
-          ditto -c -k --keepParent "$BUILT_APP" "$RUNNER_TEMP/qualification/Proliferate-staging-arm64.zip"
+          ditto -c -k --keepParent "$BUILT_APP" "$RUNNER_TEMP/qualification/Proliferate-${VITE_ENV}-arm64.zip"
           python3 - <<'PYCODE'
           import hashlib,json,os
           from pathlib import Path
           root=Path(os.environ['RUNNER_TEMP'])
-          artifact=root/'qualification/Proliferate-staging-arm64.zip'
+          artifact=root/f"qualification/Proliferate-{os.environ['VITE_ENV']}-arm64.zip"
           receipt={'source_revision':os.environ['RELEASE'],'source_archive_sha256':os.environ['SOURCE_SHA256'],
-            'environment':'staging','architecture':'arm64','artifact_sha256':hashlib.sha256(artifact.read_bytes()).hexdigest(),
+            'environment':os.environ['VITE_ENV'],'api_origin':os.environ['VITE_API_URL'],'architecture':'arm64','artifact_sha256':hashlib.sha256(artifact.read_bytes()).hexdigest(),
             'notarization':json.loads((root/'notary-result.json').read_text()),'installed_oauth_qualified':False,
             'sentry_project':'proliferate/desktop','sourcemaps_uploaded':True,
             'sourcemap_pairs':int(os.environ['SOURCEMAP_PAIRS']),'served_sourcemaps':False}
@@ -191,7 +208,7 @@ jobs:
       - name: Retain signed candidate and verification receipt
         uses: actions/upload-artifact@v4
         with:
-          name: foundation-desktop-${{ env.RELEASE }}
+          name: foundation-desktop-${{ env.VITE_ENV }}-${{ env.RELEASE }}
           path: ${{ runner.temp }}/qualification/
           if-no-files-found: error
           retention-days: 7
