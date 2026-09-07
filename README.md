@@ -45,6 +45,84 @@ Keep their conversations, branches, terminals, and reviews in one place.
 
 </div>
 
+## Who's on your team?
+
+Start with the work you wish someone could take on. Give an agent the
+instructions, workspace, and connected tools for the job.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Your on-call engineer</h3>
+      <p>"Investigate this error spike. Trace it back to a change and propose a fix."</p>
+    </td>
+    <td width="50%" valign="top">
+      <h3>Your product engineer</h3>
+      <p>"Add CSV export to the activity page, using our existing permissions."</p>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h3>Your code reviewer</h3>
+      <p>"Review this PR for regressions and missing tests. Show me what needs attention."</p>
+    </td>
+    <td valign="top">
+      <h3>Your QA engineer</h3>
+      <p>"Exercise the new invite flow, including expired links and existing accounts."</p>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h3>Your support engineer</h3>
+      <p>"Turn this customer's bug report into a reproduction and a proposed fix."</p>
+    </td>
+    <td valign="top">
+      <h3>Your release engineer</h3>
+      <p>"Review what changed since the last release. Flag migrations and draft the release notes."</p>
+    </td>
+  </tr>
+</table>
+
+These are example assignments for agents you configure. Ready-made employee
+templates are not included in this preview.
+
+## Bring the tools your team already uses
+
+The work is in your repositories, issue tracker, docs, and production systems.
+Connect those tools so your agents can work with the relevant context.
+
+| Your team's work | Connections in this repository |
+| --- | --- |
+| Code and planning | **GitHub repositories**, **GitLab.com**, **Linear** |
+| Errors and analytics | **Sentry**, **PostHog**, **Axiom** |
+| Knowledge and communication | **Notion**, **Slack** (gated read/search connector) |
+| Data and infrastructure | **Supabase**, **Neon Postgres**, **Render** |
+| Documentation and research | **Context7**, **Exa**, **Tavily** |
+
+GitHub uses the repository integration. The other names are built-in connection
+definitions for remote MCP servers; connect your accounts and configure access
+before using them. Organization admins can also add **custom remote MCP servers**.
+
+<details>
+<summary>Current connection support</summary>
+
+- **Slack is still in development.** Its MCP read/search connection is gated by
+  deployment configuration. The conversational Slack app and agent message
+  delivery are not included in this release.
+- **GitHub access here is repository access.** A built-in agent-tool connection
+  for GitHub issues and comments is not included.
+- Supabase defaults to read-only, and the Neon connection is configured
+  read-only. Available actions depend on the provider, connection, and grants.
+- Custom connections use remote HTTP(S) MCP endpoints. Authentication support
+  depends on the connection type.
+
+See the [connector catalog](./server/proliferate/server/integration_gateway/connections/seeds.py)
+and [integration docs](https://proliferate.com/docs/product/integrations) for
+configuration. Provider availability can change; the catalog is not a record
+of live connectivity checks.
+
+</details>
+
 ## Give your agents somewhere to work
 
 Start with one useful job. Investigate an issue, work on a change, or ask another
