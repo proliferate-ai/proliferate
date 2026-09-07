@@ -13,15 +13,11 @@
   <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=flat&amp;logo=github&amp;label=stars" /></a>
   <a href="https://proliferate.com/changelog"><img alt="Latest release" src="https://img.shields.io/badge/release-changelog-0969DA?style=flat" /></a>
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat" /></a>
-  <a href="https://proliferate.com/docs"><img alt="Docs" src="https://img.shields.io/badge/docs-view-0969DA?style=flat" /></a>
-  <a href="https://proliferate.com"><img alt="Website" src="https://img.shields.io/badge/website-visit-0969DA?style=flat" /></a>
-  <a href="https://discord.gg/2RVNNzEZnj"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2?style=flat&amp;logo=discord&amp;logoColor=white" /></a>
 </p>
 
 <br />
 
-Run coding agents in parallel and give them real engineering work.<br />
-Keep their conversations, branches, terminals, and reviews in one place.
+Give your agents real engineering work, together with your team.
 
 <br />
 
@@ -31,24 +27,15 @@ Keep their conversations, branches, terminals, and reviews in one place.
   <a href="#self-hosting">Self-host</a>
   &nbsp;&bull;&nbsp;
   <a href="https://proliferate.com">Managed cloud</a>
-  &nbsp;&bull;&nbsp;
-  <a href="https://proliferate.com/docs">Documentation</a>
-  &nbsp;&bull;&nbsp;
-  <a href="https://proliferate.com/changelog">Changelog</a>
-  &nbsp;&bull;&nbsp;
-  <a href="https://discord.gg/2RVNNzEZnj">Discord</a>
 </p>
 
 <img width="1200" alt="Illustrative workflow, not a product recording: a human assigns a webhook retry bug, agents investigate, implement and review, and a patch is ready to inspect." src="./assets/readme/engineering-team-preview.svg" />
-
-<p><sub>Concept illustration for this README preview. It is not a recording of a completed product run.</sub></p>
 
 </div>
 
 ## Who's on your team?
 
-Start with the work you wish someone could take on. Give an agent the
-instructions, workspace, and connected tools for the job.
+Example roles. Your choice of agent, instructions, and tools.
 
 <table>
   <tr>
@@ -83,25 +70,12 @@ instructions, workspace, and connected tools for the job.
   </tr>
 </table>
 
-These are example assignments for agents you configure. Ready-made employee
-templates are not included in this preview.
-
 ## Bring the tools your team already uses
 
-The work is in your repositories, issue tracker, docs, and production systems.
-Connect those tools so your agents can work with the relevant context.
+**GitHub repos · Linear · Sentry · PostHog · Notion · Supabase · GitLab.com ·
+Render · Neon · Axiom · Context7 · Exa · Tavily**
 
-| Your team's work | Connections in this repository |
-| --- | --- |
-| Code and planning | **GitHub repositories**, **GitLab.com**, **Linear** |
-| Errors and analytics | **Sentry**, **PostHog**, **Axiom** |
-| Knowledge and communication | **Notion**, **Slack** (gated read/search connector) |
-| Data and infrastructure | **Supabase**, **Neon Postgres**, **Render** |
-| Documentation and research | **Context7**, **Exa**, **Tavily** |
-
-GitHub uses the repository integration. The other names are built-in connection
-definitions for remote MCP servers; connect your accounts and configure access
-before using them. Organization admins can also add **custom remote MCP servers**.
+Plus custom remote MCP servers. Slack read/search is available behind a deployment gate.
 
 <details>
 <summary>Current connection support</summary>
@@ -111,6 +85,7 @@ before using them. Organization admins can also add **custom remote MCP servers*
   delivery are not included in this release.
 - **GitHub access here is repository access.** A built-in agent-tool connection
   for GitHub issues and comments is not included.
+- Other listed connections use remote MCP servers and require account setup.
 - Supabase defaults to read-only, and the Neon connection is configured
   read-only. Available actions depend on the provider, connection, and grants.
 - Custom connections use remote HTTP(S) MCP endpoints. Authentication support
@@ -123,22 +98,9 @@ of live connectivity checks.
 
 </details>
 
-## Give your agents somewhere to work
+## Use your agents
 
-Start with one useful job. Investigate an issue, work on a change, or ask another
-agent to review it. Keep the work and the evidence somewhere you can inspect.
-
-- **[Parallel agents](https://proliferate.com/docs/concepts/parallel-agents):** run agents side by side and follow their progress.
-- **[Worktree workspaces](https://proliferate.com/docs/product/workspaces):** give each task an isolated branch and working directory.
-- **[Subagents](https://proliferate.com/docs/features/subagents):** delegate scoped work and pick up the results when it finishes.
-- **[Connected tools](https://proliferate.com/docs/product/integrations):** configure MCPs, skills, computer use, browser use, and custom tools for your agents.
-- **[Recurring work](https://proliferate.com/docs/product/workflows):** configure workflows for review passes, alert triage, and other ongoing jobs.
-
-## Supported agents
-
-Use the agents you already work with. Proliferate runs each through its native
-harness, including Claude Code, Codex, OpenCode, Cursor, and Grok. Model choice
-and authentication depend on the harness you use.
+Native harnesses. Model choice and authentication depend on the agent.
 
 <table>
   <tr>
@@ -176,73 +138,24 @@ and authentication depend on the harness you use.
 
 ## Software your company can own
 
-We want a small team to be able to accomplish far more, with people and agents
-working together. As more work happens this way, the platform underneath it
-becomes important company infrastructure.
+Companies should own the platform their agents work through. Proliferate is
+**[AGPL-3.0](./LICENSE)**, with full-product self-hostability as the goal.
+Managed hosting is the option we operate for you.
 
-We believe companies should be able to understand that software, change it,
-and operate it themselves.
+**Work in progress:** the current control plane and web app are self-hostable.
+Cloud workspaces still use E2B; the fully owned sandbox stack and broader team
+experience are being built.
 
-Proliferate's source is available under **[AGPL-3.0](./LICENSE)**. Full-product
-self-hostability is the direction we're building toward. Managed hosting is
-the option where we operate the infrastructure for you.
+## Self-hosting
 
-## Where things stand
+[Guided install](./guides/deploying/self-hosted-deploy.md#guided-installer-recommended) ·
+[AWS deployment](./guides/deploying/self-hosted-aws.md) ·
+[Configuration](./server/deploy/.env.production.example)
 
-**Proliferate is under active development.** This repository includes the
-desktop app, web client, control plane, and agent runtime. The broader team
-platform and managed-cloud experience are still evolving.
+<details>
+<summary>Run from source</summary>
 
-You can self-host the current control plane and web app. **Cloud workspaces
-currently depend on E2B:** this release does not yet include a fully self-hosted
-sandbox stack. The [deployment guide](./guides/deploying/self-hosted-deploy.md)
-describes the supported base installation and optional service requirements.
-
-You can explore the source and self-hosting instructions while the broader
-platform is being built. See the [website](https://proliferate.com) for current
-managed access and availability, and the [changelog](https://proliferate.com/changelog)
-for released changes.
-
-## Get started
-
-### Desktop
-
-[Download the desktop app](https://proliferate.com), or run it from source with
-the instructions below. Start with a repository and one task whose result you
-can review.
-
-### Self-hosting
-
-Run the control plane and web app on your infrastructure, then connect the
-desktop app to that installation. The base stack runs Caddy, Postgres, a
-migration job, and the API with the compiled web client. It has its own instance
-setup and sign-in flow.
-
-Start with the [guided installer](./guides/deploying/self-hosted-deploy.md#guided-installer-recommended)
-on a Linux host with Docker and Docker Compose v2. The guide takes you through
-configuration, startup, and claiming the instance with a one-time setup token.
-Model access and cloud workspaces require additional configuration.
-
-- **Docker Compose:** [self-hosted-deploy.md](./guides/deploying/self-hosted-deploy.md)
-  covers the installer, web app, bootstrap, updates, and diagnostics
-- **AWS (one-click):** [self-hosted-aws.md](./guides/deploying/self-hosted-aws.md)
-  is a CloudFormation wrapper that provisions the stack on EC2
-- **Configuration:** [`server/deploy/.env.production.example`](./server/deploy/.env.production.example)
-  documents every required and optional setting
-
-Point the desktop app at your control plane by following
-[configure desktop](https://proliferate.com/docs/deployment/configure-desktop).
-[Open an issue](https://github.com/proliferate-ai/proliferate/issues/new/choose) or ask in
-[Discord](https://discord.gg/2RVNNzEZnj) if you hit problems, and see
-[SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
-
-### Run from source
-
-Requirements:
-
-- Rust stable
-- Node.js 22+
-- pnpm
+Requires Rust stable, Node.js 22+, and pnpm.
 
 Run the desktop app with the bundled local AnyHarness runtime:
 
@@ -266,18 +179,14 @@ make run PROFILE=main
 See [dev profiles](./guides/local/dev-profiles.md) for profile state, ports,
 generated Tauri config, and app labels.
 
+</details>
+
 ## Build with us
 
-Try Proliferate on a real piece of work. Tell us what helped, what broke, and
-what you wish you could hand off next.
+Share what your team builds. Help make the next job easier.
 
-Share a useful workflow, improve an integration, or contribute a fix. We'd love
-to see what your team builds.
-
-**[Join the community](https://discord.gg/2RVNNzEZnj) ·
-[Report an issue](https://github.com/proliferate-ai/proliferate/issues/new/choose) ·
-[Contribute](./CONTRIBUTING.md)**
-
-## License
-
-[AGPL-3.0](./LICENSE)
+[Community](https://discord.gg/2RVNNzEZnj) ·
+[Contribute](./CONTRIBUTING.md) ·
+[Docs](https://proliferate.com/docs) ·
+[Changelog](https://proliferate.com/changelog) ·
+[Report a vulnerability](./SECURITY.md)
