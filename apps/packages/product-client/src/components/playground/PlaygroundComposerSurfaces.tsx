@@ -221,7 +221,7 @@ function PlaygroundFileMentionComposerSurface({
     <>
       <div className="relative z-popover flex flex-col px-5">
         <ComposerFileMentionSearch
-          results={results}
+          items={results.map((file) => ({ kind: "file", file }))}
           highlightedIndex={0}
           listRef={listRef}
           query="a"

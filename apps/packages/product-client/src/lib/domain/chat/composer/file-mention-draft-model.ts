@@ -144,7 +144,6 @@ export function serializeChatDraftToPrompt(draft: ChatComposerDraft): string {
     return formatMarkdownFileLink(node.name || workspaceFileBasename(node.path), node.path);
   }).join("");
 }
-
 export function cloneChatDraftNode(node: ChatComposerDraftNode): ChatComposerDraftNode {
   return node.type === "text"
     ? { type: "text", text: node.text }

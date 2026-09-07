@@ -21,6 +21,7 @@ interface ImportMetaEnv {
   readonly VITE_ANYHARNESS_DEV_URL?: string;
   readonly VITE_WORKFLOWS_V2?: string;
   readonly VITE_AGENT_AUTH_EVIDENCE_PANES?: string;
+  readonly VITE_CHAT_CONTEXT_DOC_MENTIONS?: string;
 }
 
 interface ImportMeta {
