@@ -7,7 +7,7 @@
   </picture>
 </p>
 
-<h3>The open-source AI IDE</h3>
+<h3>Your AI engineering team. Open source.</h3>
 
 <p>
   <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=flat&amp;logo=github&amp;label=stars" /></a>
@@ -20,13 +20,17 @@
 
 <br />
 
-Run Claude Code, Codex, OpenCode, Grok, and any other coding agent in parallel, in one workspace.<br />
-Each task gets an isolated git worktree for its branch, terminal, conversation, and review state.
+Run coding agents in parallel and give them real engineering work.<br />
+Keep their conversations, branches, terminals, and reviews in one place.
 
 <br />
 
 <p>
   <a href="https://proliferate.com"><strong>Download for macOS</strong></a>
+  &nbsp;&bull;&nbsp;
+  <a href="#self-hosting">Self-host</a>
+  &nbsp;&bull;&nbsp;
+  <a href="https://proliferate.com">Managed cloud</a>
   &nbsp;&bull;&nbsp;
   <a href="https://proliferate.com/docs">Documentation</a>
   &nbsp;&bull;&nbsp;
@@ -35,22 +39,28 @@ Each task gets an isolated git worktree for its branch, terminal, conversation, 
   <a href="https://discord.gg/2RVNNzEZnj">Discord</a>
 </p>
 
-<img width="full" alt="Proliferate" src="./assets/readme/hero.png" />
+<img width="1200" alt="Illustrative workflow, not a product recording: a human assigns a webhook retry bug, agents investigate, implement and review, and a patch is ready to inspect." src="./assets/readme/engineering-team-preview.svg" />
+
+<p><sub>Concept illustration for this README preview. It is not a recording of a completed product run.</sub></p>
 
 </div>
 
-## Features
+## Give your agents somewhere to work
 
-- 🤖 **[Native harnesses](https://proliferate.com/docs/product/agents)** - Claude Code, Codex, OpenCode, Cursor, Grok, and more
-- 🌳 **[Worktree workspaces](https://proliferate.com/docs/product/workspaces)** - an isolated branch and working directory for every task
-- 🔀 **[Parallel agents](https://proliferate.com/docs/concepts/parallel-agents)** - run agents side by side in the same workspace, each on its own task
-- 🪆 **[Subagents](https://proliferate.com/docs/features/subagents)** - agents delegate scoped work to child agents and pick the results back up when they finish
-- 🧩 **[Integrations](https://proliferate.com/docs/product/integrations)** - MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
-- ⏰ **[Workflows](https://proliferate.com/docs/product/workflows)** - recurring and event-driven agent runs: nightly review passes, triage on alerts, dependency bumps
+Start with one useful job. Investigate an issue, work on a change, or ask another
+agent to review it. Keep the work and the evidence somewhere you can inspect.
+
+- **[Parallel agents](https://proliferate.com/docs/concepts/parallel-agents):** run agents side by side and follow their progress.
+- **[Worktree workspaces](https://proliferate.com/docs/product/workspaces):** give each task an isolated branch and working directory.
+- **[Subagents](https://proliferate.com/docs/features/subagents):** delegate scoped work and pick up the results when it finishes.
+- **[Connected tools](https://proliferate.com/docs/product/integrations):** configure MCPs, skills, computer use, browser use, and custom tools for your agents.
+- **[Recurring work](https://proliferate.com/docs/product/workflows):** configure workflows for review passes, alert triage, and other ongoing jobs.
 
 ## Supported agents
 
-Proliferate runs each agent through its native harness.
+Use the agents you already work with. Proliferate runs each through its native
+harness, including Claude Code, Codex, OpenCode, Cursor, and Grok. Model choice
+and authentication depend on the harness you use.
 
 <table>
   <tr>
@@ -86,14 +96,57 @@ Proliferate runs each agent through its native harness.
   </tr>
 </table>
 
-## Self-hosting
+## Software your company can own
 
-The full Proliferate control plane is self-hostable. Start with the
-[deployment docs](https://proliferate.com/docs/deployment), which cover Docker,
-AWS, GCP, Azure, Kubernetes, and air-gapped operation.
+We want a small team to be able to accomplish far more, with people and agents
+working together. As more work happens this way, the platform underneath it
+becomes important company infrastructure.
+
+We believe companies should be able to understand that software, change it,
+and operate it themselves.
+
+Proliferate's source is available under **[AGPL-3.0](./LICENSE)**. Full-product
+self-hostability is the direction we're building toward. Managed hosting is
+the option where we operate the infrastructure for you.
+
+## Where things stand
+
+**Proliferate is under active development.** This repository includes the
+desktop app, web client, control plane, and agent runtime. The broader team
+platform and managed-cloud experience are still evolving.
+
+You can self-host the current control plane and web app. **Cloud workspaces
+currently depend on E2B:** this release does not yet include a fully self-hosted
+sandbox stack. The [deployment guide](./guides/deploying/self-hosted-deploy.md)
+describes the supported base installation and optional service requirements.
+
+You can explore the source and self-hosting instructions while the broader
+platform is being built. See the [website](https://proliferate.com) for current
+managed access and availability, and the [changelog](https://proliferate.com/changelog)
+for released changes.
+
+## Get started
+
+### Desktop
+
+[Download the desktop app](https://proliferate.com), or run it from source with
+the instructions below. Start with a repository and one task whose result you
+can review.
+
+### Self-hosting
+
+Run the control plane and web app on your infrastructure, then connect the
+desktop app to that installation. The base stack runs Caddy, Postgres, a
+migration job, and the API with the compiled web client. It has its own instance
+setup and sign-in flow.
+
+Start with the [guided installer](./guides/deploying/self-hosted-deploy.md#guided-installer-recommended)
+on a Linux host with Docker and Docker Compose v2. The guide takes you through
+configuration, startup, and claiming the instance with a one-time setup token.
+Model access and cloud workspaces require additional configuration.
 
 - **Docker Compose:** [self-hosted-deploy.md](./guides/deploying/self-hosted-deploy.md)
-  runs Caddy, Postgres, and the API, with bootstrap and update scripts
+  covers the installer, web app, bootstrap, updates, and diagnostics
 - **AWS (one-click):** [self-hosted-aws.md](./guides/deploying/self-hosted-aws.md)
   is a CloudFormation wrapper that provisions the stack on EC2
 - **Configuration:** [`server/deploy/.env.production.example`](./server/deploy/.env.production.example)
@@ -105,10 +158,7 @@ Point the desktop app at your control plane by following
 [Discord](https://discord.gg/2RVNNzEZnj) if you hit problems, and see
 [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 
-<details>
-<summary>Run from source</summary>
-
-<br />
+### Run from source
 
 Requirements:
 
@@ -138,15 +188,17 @@ make run PROFILE=main
 See [dev profiles](./guides/local/dev-profiles.md) for profile state, ports,
 generated Tauri config, and app labels.
 
-</details>
+## Build with us
 
-## Community
+Try Proliferate on a real piece of work. Tell us what helped, what broke, and
+what you wish you could hand off next.
 
-Join our community on [Discord](https://discord.gg/2RVNNzEZnj)!
+Share a useful workflow, improve an integration, or contribute a fix. We'd love
+to see what your team builds.
 
-## Contributing
-
-Contributing? See the [Contribution Guide](./CONTRIBUTING.md).
+**[Join the community](https://discord.gg/2RVNNzEZnj) ·
+[Report an issue](https://github.com/proliferate-ai/proliferate/issues/new/choose) ·
+[Contribute](./CONTRIBUTING.md)**
 
 ## License
 

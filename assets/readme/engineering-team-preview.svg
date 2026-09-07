@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Proliferate: an illustrative engineering-team workflow</title>
+  <desc id="desc">Concept mockup, not a product recording. A person asks Proliferate to investigate webhook retries, reproduce the issue, fix it, and review the change. Investigation, implementation, and review share a task. An example patch and regression-test artifact make the proposed work inspectable.</desc>
+  <defs>
+    <filter id="window-shadow" x="16" y="60" width="1168" height="572" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#25221E" flood-opacity="0.07"/>
+    </filter>
+    <clipPath id="window-clip"><rect x="40" y="84" width="1120" height="518" rx="16"/></clipPath>
+    <clipPath id="patch-clip"><rect x="64" y="404" width="664" height="174" rx="10"/></clipPath>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+      .ink { fill: #252521; }
+      .muted { fill: #64615C; }
+      .mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; }
+      .label { font-size: 12px; font-weight: 600; letter-spacing: 1.25px; }
+      .body { font-size: 15px; }
+      .small { font-size: 13px; }
+      .icon { stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="640" rx="20" fill="#F4F1E9"/>
+  <text x="40" y="48" class="ink" font-size="27" font-weight="650" letter-spacing="-0.7">Your AI engineering team.</text>
+  <rect x="922" y="25" width="238" height="30" rx="15" fill="#FFF9F3" stroke="#D9B29A"/>
+  <circle cx="939" cy="40" r="3.5" fill="#D65020"/>
+  <text x="953" y="44" fill="#93401E" font-size="11" font-weight="650" letter-spacing="1.1">ILLUSTRATIVE WORKFLOW</text>
+
+  <rect x="40" y="84" width="1120" height="518" rx="16" fill="#FFFFFF" filter="url(#window-shadow)"/>
+  <g clip-path="url(#window-clip)">
+    <rect x="40" y="84" width="1120" height="48" fill="#FCFBF8"/>
+    <path d="M40 132H1160" stroke="#E2DED6"/>
+    <text x="64" y="114" class="ink" font-size="17" font-weight="650" letter-spacing="-0.4">Proliferate</text>
+    <path d="M174 101V116" stroke="#D9D5CD"/>
+    <text x="194" y="114" class="muted small">Engineering</text>
+    <path d="m284 103 5 5-5 5" class="icon" stroke="#89847D"/>
+    <text x="307" y="114" class="ink small" font-weight="550">Webhook retries</text>
+    <rect x="1001" y="97" width="135" height="23" rx="11.5" fill="#EEECE6"/>
+    <g stroke="#64615C" class="icon">
+      <circle cx="1017" cy="105" r="2.5"/>
+      <path d="M1012 113c0-4.5 10-4.5 10 0m3-9c3 0 3 4 0 4m1 2c2 0 3 1 3 3"/>
+    </g>
+    <text x="1038" y="112" class="muted" font-size="12" font-weight="550">Shared task</text>
+
+    <rect x="64" y="152" width="1072" height="76" rx="12" fill="#F6F5F1" stroke="#E3DFD7"/>
+    <circle cx="94" cy="187" r="17" fill="#E5E1D8"/>
+    <g stroke="#625D53" class="icon">
+      <circle cx="94" cy="183" r="4"/>
+      <path d="M86 194c0-7 16-7 16 0"/>
+    </g>
+    <text x="124" y="177" class="muted small" font-weight="600">You</text>
+    <text x="124" y="203" class="ink" font-size="17" font-weight="450">Investigate the webhook retries. Reproduce it, fix it, and review the change.</text>
+
+    <text x="64" y="254" class="muted label">DELEGATED WORK</text>
+    <text x="1136" y="254" text-anchor="end" class="muted small">Parallel work, shared context</text>
+
+    <rect x="64" y="269" width="344" height="110" rx="10" fill="#FFFFFF" stroke="#DDD9D1"/>
+    <rect x="82" y="287" width="28" height="28" rx="8" fill="#FEF0E8"/>
+    <g stroke="#C64D22" class="icon">
+      <circle cx="95" cy="299" r="5.5"/>
+      <path d="m99 303 5 5"/>
+    </g>
+    <text x="122" y="307" class="ink" font-size="17" font-weight="600">Investigation</text>
+    <text x="82" y="339" class="muted body">Trace the duplicate delivery.</text>
+    <text x="82" y="362" class="muted body">Reproduce the retry sequence.</text>
+
+    <rect x="428" y="269" width="344" height="110" rx="10" fill="#FFFFFF" stroke="#DDD9D1"/>
+    <rect x="446" y="287" width="28" height="28" rx="8" fill="#FEF0E8"/>
+    <g stroke="#C64D22" class="icon">
+      <path d="m455 296-5 5 5 5m10-10 5 5-5 5m-4-11-3 14"/>
+    </g>
+    <text x="486" y="307" class="ink" font-size="17" font-weight="600">Implementation</text>
+    <text x="446" y="339" class="muted body">Make delivery idempotent.</text>
+    <text x="446" y="362" class="muted body">Add a regression test.</text>
+
+    <rect x="792" y="269" width="344" height="110" rx="10" fill="#FFFFFF" stroke="#DDD9D1"/>
+    <rect x="810" y="287" width="28" height="28" rx="8" fill="#FEF0E8"/>
+    <g stroke="#C64D22" class="icon">
+      <path d="M819 293h9l3 3v13h-12zM827 293v4h4m-10 6 3 3 5-6"/>
+    </g>
+    <text x="850" y="307" class="ink" font-size="17" font-weight="600">Review</text>
+    <text x="810" y="339" class="muted body">Inspect the patch and test.</text>
+    <text x="810" y="362" class="muted body">Check failure and retry paths.</text>
+
+    <g clip-path="url(#patch-clip)">
+      <rect x="64" y="404" width="664" height="174" fill="#FCFCFA"/>
+      <rect x="64" y="404" width="664" height="39" fill="#F1F0EB"/>
+      <path d="M64 443H728" stroke="#DDD9D1"/>
+      <g stroke="#64615C" class="icon">
+        <path d="M84 415h8l4 4v11H84zM91 415v5h5"/>
+      </g>
+      <text x="109" y="429" class="ink mono small">webhooks/handler.ts</text>
+      <text x="708" y="429" text-anchor="end" class="muted" font-size="12">EXAMPLE PATCH</text>
+      <rect x="65" y="455" width="662" height="25" fill="#FCECE9"/>
+      <rect x="65" y="480" width="662" height="75" fill="#ECF5EC"/>
+      <g class="mono" font-size="14">
+        <text x="82" y="473" fill="#A84436">−</text>
+        <text x="110" y="473" fill="#733E34">await deliver(event);</text>
+        <text x="82" y="499" fill="#2A6C3B">+</text>
+        <text x="110" y="499" fill="#285C36">await withIdempotency(event.id, async () =&gt; {</text>
+        <text x="82" y="522" fill="#2A6C3B">+</text>
+        <text x="127" y="522" fill="#285C36">await deliver(event);</text>
+        <text x="82" y="545" fill="#2A6C3B">+</text>
+        <text x="110" y="545" fill="#285C36">});</text>
+      </g>
+    </g>
+    <rect x="64" y="404" width="664" height="174" rx="10" stroke="#DDD9D1"/>
+
+    <rect x="748" y="404" width="388" height="174" rx="10" fill="#FFFFFF" stroke="#DDD9D1"/>
+    <text x="768" y="433" class="ink" font-size="15" font-weight="600">Regression test</text>
+    <text x="1116" y="433" text-anchor="end" class="muted" font-size="12">EXAMPLE ARTIFACT</text>
+    <path d="M768 448H1116" stroke="#E5E1DA"/>
+    <rect x="768" y="464" width="30" height="30" rx="8" fill="#ECF5EC"/>
+    <path d="m777 479 4 4 8-9" stroke="#2A6C3B" class="icon"/>
+    <text x="810" y="476" class="ink body" font-weight="550">A retried event is delivered once.</text>
+    <text x="810" y="498" class="muted small">Replay the same event; assert one delivery.</text>
+    <rect x="768" y="522" width="348" height="36" rx="7" fill="#F5F3ED"/>
+    <g stroke="#64615C" class="icon">
+      <path d="M781 533h12v12h-12zM785 537h4m-4 4h4"/>
+    </g>
+    <text x="805" y="545" class="ink small" font-weight="550">Patch and evidence, ready to inspect.</text>
+  </g>
+  <rect x="40" y="84" width="1120" height="518" rx="16" stroke="#D8D3C9"/>
+  <text x="40" y="624" class="muted" font-size="12">Concept mockup · not a product recording</text>
+  <text x="1160" y="624" text-anchor="end" class="muted" font-size="12">People direct the work. Agents work together.</text>
+</svg>
