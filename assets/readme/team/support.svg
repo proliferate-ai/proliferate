@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Illustrative support investigation: a reproduced invite bug</title>
+  <desc id="desc">Concept illustration, not a real customer quote or product recording. A sample report says invites break after sign-in. A reproduction artifact shows that the invite token is lost.</desc>
+  <defs><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;fill:#292722}.muted{fill:#676159}.mono{font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace}.icon{stroke-linecap:round;stroke-linejoin:round}</style></defs>
+  <rect width="720" height="420" rx="18" fill="#F4F1E9"/>
+  <text x="32" y="66" font-size="30" font-weight="600" letter-spacing="-0.8">Bug reproduction</text>
+  <rect x="534" y="30" width="154" height="29" rx="14.5" fill="#FFF9F3" stroke="#D9B29A"/>
+  <text x="611" y="50" text-anchor="middle" font-size="15" font-weight="600" letter-spacing="0.9" style="fill:#93401E">ILLUSTRATIVE</text>
+  <rect x="32" y="99" width="656" height="111" rx="14" fill="#FFFFFF" stroke="#D9D4CA"/>
+  <path d="M58 122h22v16H68l-7 6v-6h-3z" stroke="#7B7367" stroke-width="2" class="icon"/>
+  <text x="94" y="138" font-size="18" class="muted">Customer report</text>
+  <text x="56" y="181" font-size="28" font-weight="500" letter-spacing="-0.4">“Invites break after I sign in.”</text>
+  <path d="M360 212v16m-5-5 5 5 5-5" stroke="#A79C8B" stroke-width="2" class="icon"/>
+  <rect x="32" y="241" width="656" height="147" rx="14" fill="#2C2A25"/>
+  <text x="56" y="277" font-size="21" class="mono" style="fill:#F1EDE5">invite.spec.ts</text>
+  <rect x="493" y="255" width="171" height="31" rx="7" fill="#593A29"/>
+  <text x="578.5" y="277" text-anchor="middle" font-size="16" font-weight="600" letter-spacing="0.4" style="fill:#FFBD8B">REPRODUCED</text>
+  <path d="M56 300H664" stroke="#4B473F"/>
+  <text x="56" y="332" font-size="20" class="mono" style="fill:#B9B1A4">Expected</text>
+  <text x="189" y="332" font-size="22" class="mono" style="fill:#F1EDE5">invite token retained</text>
+  <text x="56" y="365" font-size="20" class="mono" style="fill:#B9B1A4">Received</text>
+  <text x="189" y="365" font-size="22" class="mono" style="fill:#FFBD8B">token missing</text>
+</svg>

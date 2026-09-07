@@ -35,37 +35,31 @@ Give your agents real engineering work, together with your team.
 
 ## Who's on your team?
 
-Example roles. Your choice of agent, instructions, and tools.
+Example assignments. Pick a role to see the prompt.
 
 <table>
   <tr>
-    <td width="50%" valign="top">
-      <h3>Your on-call engineer</h3>
-      <p>"Investigate this error spike. Trace it back to a change and propose a fix."</p>
+    <td width="50%" align="center">
+      <a href="./assets/readme/team/examples.md#on-call-engineer"><img src="./assets/readme/team/on-call.svg" width="100%" alt="Illustrative on-call workflow: trace an error spike to a code change." /><br /><strong>On-call engineer →</strong></a>
     </td>
-    <td width="50%" valign="top">
-      <h3>Your product engineer</h3>
-      <p>"Add CSV export to the activity page, using our existing permissions."</p>
+    <td width="50%" align="center">
+      <a href="./assets/readme/team/examples.md#product-engineer"><img src="./assets/readme/team/product.svg" width="100%" alt="Illustrative product workflow: build a CSV export for your app." /><br /><strong>Product engineer →</strong></a>
     </td>
   </tr>
   <tr>
-    <td valign="top">
-      <h3>Your code reviewer</h3>
-      <p>"Review this PR for regressions and missing tests. Show me what needs attention."</p>
+    <td align="center">
+      <a href="./assets/readme/team/examples.md#code-reviewer"><img src="./assets/readme/team/review.svg" width="100%" alt="Illustrative code review: an annotated diff with a regression to address." /><br /><strong>Code reviewer →</strong></a>
     </td>
-    <td valign="top">
-      <h3>Your QA engineer</h3>
-      <p>"Exercise the new invite flow, including expired links and existing accounts."</p>
+    <td align="center">
+      <a href="./assets/readme/team/examples.md#qa-engineer"><img src="./assets/readme/team/qa.svg" width="100%" alt="Illustrative QA workflow: check the invite flow and its edge cases." /><br /><strong>QA engineer →</strong></a>
     </td>
   </tr>
   <tr>
-    <td valign="top">
-      <h3>Your support engineer</h3>
-      <p>"Turn this customer's bug report into a reproduction and a proposed fix."</p>
+    <td align="center">
+      <a href="./assets/readme/team/examples.md#support-engineer"><img src="./assets/readme/team/support.svg" width="100%" alt="Illustrative support workflow: turn a customer report into a reproduction." /><br /><strong>Support engineer →</strong></a>
     </td>
-    <td valign="top">
-      <h3>Your release engineer</h3>
-      <p>"Review what changed since the last release. Flag migrations and draft the release notes."</p>
+    <td align="center">
+      <a href="./assets/readme/team/examples.md#release-engineer"><img src="./assets/readme/team/release.svg" width="100%" alt="Illustrative release workflow: review changes and prepare a release checklist." /><br /><strong>Release engineer →</strong></a>
     </td>
   </tr>
 </table>

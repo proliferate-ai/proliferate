@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Illustrative code review: an expired-session edge case</title>
+  <desc id="desc">Concept illustration, not a product recording or an actual code review. A short access.ts diff reads session.user. An attached review comment asks for a null check when the session expires.</desc>
+  <defs>
+    <clipPath id="code-clip"><rect x="32" y="99" width="656" height="182" rx="14"/></clipPath>
+    <style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;fill:#292722}.muted{fill:#676159}.mono{font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace}.icon{stroke-linecap:round;stroke-linejoin:round}</style>
+  </defs>
+  <rect width="720" height="420" rx="18" fill="#F4F1E9"/>
+  <text x="32" y="66" font-size="30" font-weight="600" letter-spacing="-0.8">Session handling</text>
+  <rect x="534" y="30" width="154" height="29" rx="14.5" fill="#FFF9F3" stroke="#D9B29A"/>
+  <text x="611" y="50" text-anchor="middle" font-size="15" font-weight="600" letter-spacing="0.9" style="fill:#93401E">ILLUSTRATIVE</text>
+  <g clip-path="url(#code-clip)">
+    <rect x="32" y="99" width="656" height="182" fill="#FFFFFF"/>
+    <rect x="32" y="99" width="656" height="47" fill="#ECE9E2"/>
+    <text x="56" y="130" font-size="20" class="mono">access.ts</text>
+    <text x="664" y="129" text-anchor="end" font-size="16" class="muted">PATCH</text>
+    <text x="86" y="180" font-size="21" class="mono">const session = await getSession();</text>
+    <rect x="32" y="194" width="656" height="36" fill="#FCECE9"/>
+    <text x="55" y="219" font-size="21" class="mono" style="fill:#974E3F">−</text>
+    <text x="86" y="219" font-size="21" class="mono" style="fill:#794236">return cachedUser;</text>
+    <rect x="32" y="230" width="656" height="38" fill="#ECF4EB"/>
+    <text x="55" y="256" font-size="21" class="mono" style="fill:#376445">+</text>
+    <text x="86" y="256" font-size="21" class="mono" style="fill:#285C36">return session.user;</text>
+    <path d="M173 264H323" stroke="#D95224" stroke-width="2"/>
+  </g>
+  <rect x="32" y="99" width="656" height="182" rx="14" stroke="#D9D4CA"/>
+  <path d="M250 281v13q0 11 11 11h27" stroke="#BD9C84" stroke-width="2" class="icon"/>
+  <rect x="76" y="300" width="612" height="88" rx="12" fill="#FFFAF3" stroke="#D8BA9E"/>
+  <rect x="96" y="320" width="36" height="36" rx="10" fill="#FBE8D8"/>
+  <path d="M106 330h16v12h-9l-5 4v-4h-2z" stroke="#BD4B22" stroke-width="2" class="icon"/>
+  <text x="148" y="335" font-size="24" font-weight="600">What if the session expires?</text>
+  <text x="148" y="365" font-size="21" class="muted">Add a null check before reading user.</text>
+</svg>

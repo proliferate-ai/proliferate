@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Illustrative product work: an activity CSV export</title>
+  <desc id="desc">Concept illustration, not a product recording. A sample activity interface has a CSV export control, an event table, and a prepared activity.csv file.</desc>
+  <defs><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;fill:#292722}.muted{fill:#676159}.icon{stroke-linecap:round;stroke-linejoin:round}</style></defs>
+  <rect width="720" height="420" rx="18" fill="#F4F1E9"/>
+  <text x="32" y="66" font-size="30" font-weight="600" letter-spacing="-0.8">Activity export</text>
+  <rect x="534" y="30" width="154" height="29" rx="14.5" fill="#FFF9F3" stroke="#D9B29A"/>
+  <text x="611" y="50" text-anchor="middle" font-size="15" font-weight="600" letter-spacing="0.9" style="fill:#93401E">ILLUSTRATIVE</text>
+  <rect x="32" y="99" width="656" height="289" rx="14" fill="#FFFFFF" stroke="#D9D4CA"/>
+  <text x="56" y="146" font-size="24" font-weight="600">Activity</text>
+  <rect x="486" y="117" width="178" height="44" rx="9" fill="#D95224"/>
+  <path d="M509 129v13m-5-5 5 5 5-5m-11 8v4h12v-4" stroke="#FFFFFF" stroke-width="2" class="icon"/>
+  <text x="531" y="146" font-size="21" font-weight="550" style="fill:#FFFFFF">Export CSV</text>
+  <path d="M56 180H664" stroke="#E4DFD6"/>
+  <text x="56" y="209" font-size="17" class="muted">EVENT</text>
+  <text x="417" y="209" font-size="17" class="muted">STATUS</text>
+  <text x="664" y="209" text-anchor="end" font-size="17" class="muted">WHEN</text>
+  <path d="M56 224H664M56 276H664M56 328H664" stroke="#ECE8E1"/>
+  <text x="56" y="257" font-size="22">Invite accepted</text>
+  <circle cx="426" cy="250" r="4" fill="#50734D"/>
+  <text x="441" y="257" font-size="19" class="muted">Recorded</text>
+  <text x="664" y="257" text-anchor="end" font-size="19" class="muted">Today</text>
+  <text x="56" y="309" font-size="22">Project created</text>
+  <circle cx="426" cy="302" r="4" fill="#50734D"/>
+  <text x="441" y="309" font-size="19" class="muted">Recorded</text>
+  <text x="664" y="309" text-anchor="end" font-size="19" class="muted">Today</text>
+  <rect x="241" y="320" width="423" height="53" rx="10" fill="#F7F4ED" stroke="#D7D0C3"/>
+  <path d="M261 334h15l6 6v20h-21zM275 334v7h7m-16 6h10m-10 5h10" stroke="#BD4B22" stroke-width="2" class="icon"/>
+  <text x="297" y="354" font-size="22" font-weight="550">activity.csv</text>
+  <text x="647" y="353" text-anchor="end" font-size="18" class="muted">Ready to download</text>
+</svg>

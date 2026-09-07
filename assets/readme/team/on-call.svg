@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Illustrative on-call investigation of webhook failures</title>
+  <desc id="desc">Concept illustration, not a product recording or a real incident. A schematic error-rate spike after a deployment leads to a trace identifying a missing idempotency guard.</desc>
+  <defs>
+    <linearGradient id="spike-fill" x1="360" y1="156" x2="360" y2="258" gradientUnits="userSpaceOnUse"><stop stop-color="#E96430" stop-opacity="0.18"/><stop offset="1" stop-color="#E96430" stop-opacity="0.02"/></linearGradient>
+    <style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;fill:#292722}.muted{fill:#676159}.label{font-size:16px;letter-spacing:1px;font-weight:600}.icon{stroke-linecap:round;stroke-linejoin:round}</style>
+  </defs>
+  <rect width="720" height="420" rx="18" fill="#F4F1E9"/>
+  <text x="32" y="66" font-size="30" font-weight="600" letter-spacing="-0.8">Webhook failures</text>
+  <rect x="534" y="30" width="154" height="29" rx="14.5" fill="#FFF9F3" stroke="#D9B29A"/>
+  <text x="611" y="50" text-anchor="middle" font-size="15" font-weight="600" letter-spacing="0.9" style="fill:#93401E">ILLUSTRATIVE</text>
+  <rect x="32" y="99" width="656" height="289" rx="14" fill="#FFFFFF" stroke="#D9D4CA"/>
+  <text x="56" y="133" class="muted label">ERROR RATE</text>
+  <text x="664" y="133" text-anchor="end" class="muted" font-size="17">Webhook endpoint</text>
+  <path d="M56 178H664M56 218H664M56 258H664" stroke="#ECE8E1"/>
+  <path d="M56 250 88 250 108 246 128 250 169 248 192 250 232 248 262 250 286 245 312 249 342 248 365 249 385 231 406 238 427 169 450 193 471 157 495 180 518 165 541 173 563 159 587 168 609 162 638 170 664 165V258H56Z" fill="url(#spike-fill)"/>
+  <path d="M56 250 88 250 108 246 128 250 169 248 192 250 232 248 262 250 286 245 312 249 342 248 365 249 385 231 406 238 427 169 450 193 471 157 495 180 518 165 541 173 563 159 587 168 609 162 638 170 664 165" stroke="#D95224" stroke-width="3.5" class="icon"/>
+  <path d="M366 151V258" stroke="#B8B1A6" stroke-dasharray="4 5"/>
+  <rect x="327" y="153" width="78" height="28" rx="7" fill="#F4F1E9"/>
+  <text x="366" y="172" text-anchor="middle" class="muted" font-size="16">deploy</text>
+  <path d="M92 297H608" stroke="#DBD6CC" stroke-width="2"/>
+  <circle cx="92" cy="297" r="6" fill="#8B8376"/>
+  <circle cx="350" cy="297" r="6" fill="#D95224"/>
+  <circle cx="608" cy="297" r="6" fill="#D95224"/>
+  <text x="92" y="333" text-anchor="middle" font-size="21" font-weight="550">Deploy</text>
+  <text x="350" y="333" text-anchor="middle" font-size="21" font-weight="550">Retry spike</text>
+  <text x="608" y="333" text-anchor="middle" font-size="21" font-weight="550">Cause found</text>
+  <text x="608" y="359" text-anchor="middle" class="muted" font-size="17">Missing guard</text>
+</svg>

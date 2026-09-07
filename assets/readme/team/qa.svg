@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Illustrative QA results for an invitation flow</title>
+  <desc id="desc">Concept illustration, not a product recording or real test results. New-teammate and existing-account cases pass in the example. The expired-link case needs a fix.</desc>
+  <defs><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;fill:#292722}.muted{fill:#676159}.icon{stroke-linecap:round;stroke-linejoin:round}</style></defs>
+  <rect width="720" height="420" rx="18" fill="#F4F1E9"/>
+  <text x="32" y="66" font-size="30" font-weight="600" letter-spacing="-0.8">Invite flow</text>
+  <rect x="534" y="30" width="154" height="29" rx="14.5" fill="#FFF9F3" stroke="#D9B29A"/>
+  <text x="611" y="50" text-anchor="middle" font-size="15" font-weight="600" letter-spacing="0.9" style="fill:#93401E">ILLUSTRATIVE</text>
+  <rect x="32" y="99" width="656" height="289" rx="14" fill="#FFFFFF" stroke="#D9D4CA"/>
+  <rect x="56" y="119" width="608" height="37" rx="8" fill="#F3F0EA"/>
+  <path d="M73 136h10m-6-4-4 4 4 4" stroke="#82796C" stroke-width="2" class="icon"/>
+  <text x="100" y="144" font-size="19" class="muted">app / invite</text>
+  <text x="648" y="143" text-anchor="end" font-size="16" class="muted">TEST RESULTS</text>
+  <rect x="56" y="178" width="608" height="52" rx="9" fill="#FAFAF7"/>
+  <circle cx="84" cy="204" r="14" fill="#E5EFE3"/>
+  <path d="m78 204 4 4 8-9" stroke="#376445" stroke-width="2.5" class="icon"/>
+  <text x="112" y="212" font-size="24" font-weight="550">New teammate</text>
+  <text x="640" y="211" text-anchor="end" font-size="20" style="fill:#376445">Pass</text>
+  <rect x="56" y="244" width="608" height="58" rx="9" fill="#FFF2E8" stroke="#DDB694"/>
+  <circle cx="84" cy="273" r="14" fill="#F7DDC7"/>
+  <path d="M84 266v8m0 5v0.2" stroke="#B64A23" stroke-width="2.6" class="icon"/>
+  <text x="112" y="281" font-size="24" font-weight="550">Expired link</text>
+  <text x="640" y="280" text-anchor="end" font-size="20" font-weight="550" style="fill:#A14622">Needs fix</text>
+  <rect x="56" y="316" width="608" height="52" rx="9" fill="#FAFAF7"/>
+  <circle cx="84" cy="342" r="14" fill="#E5EFE3"/>
+  <path d="m78 342 4 4 8-9" stroke="#376445" stroke-width="2.5" class="icon"/>
+  <text x="112" y="350" font-size="24" font-weight="550">Existing account</text>
+  <text x="640" y="349" text-anchor="end" font-size="20" style="fill:#376445">Pass</text>
+</svg>
