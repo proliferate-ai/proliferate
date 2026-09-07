@@ -67,7 +67,9 @@ export function PageContentFrame({
       )}
       <div
         className={twMerge(
-          "mx-auto flex min-h-full w-full min-w-0 flex-col gap-5 px-10 pb-12 pt-14",
+          // Keep the page content just below the shared 46px native drag
+          // strip; pt-14 left an extra 10px of unexplained space here.
+          "mx-auto flex min-h-full w-full min-w-0 flex-col gap-5 px-10 pb-12 pt-12",
           maxWidthClassName,
         )}
       >
