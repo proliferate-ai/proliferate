@@ -1,0 +1,2 @@
+# Sample C
+fn main() {}
