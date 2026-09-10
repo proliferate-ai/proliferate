@@ -24,9 +24,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE: ccad35b11b7a3204d9e2580cff3439c8fc8b81b7
-  SOURCE_SHA256: 1a499a7c9f8e76d6bc8bbb4e6313fd1e41cbd0d824e99e643b669c03861c8256
-  VITE_RELEASE: ccad35b11b7a3204d9e2580cff3439c8fc8b81b7
+  RELEASE: a9497657f1da32b0351a6d8ab6a692207f62430b
+  SOURCE_SHA256: 191eeae55b55665476011d74d5a211798de2a0fd942b06babc709fb3f7bdcf9b
+  VITE_RELEASE: a9497657f1da32b0351a6d8ab6a692207f62430b
   VITE_ENV: ${{ inputs.target_environment || 'staging' }}
   VITE_TELEMETRY_MODE: prod
   VITE_SHELL: desktop
