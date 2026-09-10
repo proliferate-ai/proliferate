@@ -3,7 +3,7 @@
 ## Foundation qualification branch
 
 On `codex/foundation-signing`, `release-desktop.yml` temporarily packages the fixed
-foundation candidate `a9497657f1da32b0351a6d8ab6a692207f62430b`. Dispatch verifies
+foundation candidate `a31921cec1a020d1aea8797e5dfcd3219e38c33b`. Dispatch verifies
 its private source archive checksum, builds before loading signing credentials,
 signs bundled Node before recording its final hash, signs and notarizes the app,
 and retains the signed ZIP plus verification receipt as a private workflow artifact.
