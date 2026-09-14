@@ -176,6 +176,33 @@ SEED_DEFINITIONS: tuple[SeedDefinition, ...] = (
         ),
     ),
     SeedDefinition(
+        namespace="youcom",
+        display_name="You.com",
+        description=(
+            "Use You.com when Proliferate needs web search with citations, "
+            "URL content extraction, and research tools through You.com's "
+            "hosted MCP server."
+        ),
+        auth_kind="api_key",
+        oauth_client_mode=None,
+        config=IntegrationConfig(
+            transport="http",
+            url=StaticUrl("https://api.you.com/mcp"),
+            display_url="https://api.you.com/mcp",
+            credential_validation="mcp_tools_list",
+            headers=(_bearer_header("api_key"),),
+            cloud_secret_sync=True,
+            secret_fields=(
+                _secret_field(
+                    "api_key",
+                    "API key",
+                    "Paste your You.com API key",
+                    "Create an API key at https://you.com/platform/api-keys.",
+                ),
+            ),
+        ),
+    ),
+    SeedDefinition(
         namespace="posthog",
         display_name="PostHog",
         description=(

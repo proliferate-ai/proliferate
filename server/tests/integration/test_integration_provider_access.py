@@ -43,11 +43,11 @@ SLACK_SCOPES = (
 async def test_sync_seed_definitions_is_idempotent(db_session: AsyncSession) -> None:
     first = await sync_seed_definitions(db_session)
     await db_session.commit()
-    assert len(first) == 13
+    assert len(first) == 14
 
     second = await sync_seed_definitions(db_session)
     await db_session.commit()
-    assert len(second) == 13
+    assert len(second) == 14
 
     seeds = await definitions_store.list_seed_definitions(db_session)
     namespaces = {d.namespace for d in seeds}
@@ -535,7 +535,7 @@ async def test_sync_archives_removed_seeds_and_unarchives_restored_ones(
 
     # Verify actual seeds remain unarchived.
     current_seeds = await definitions_store.list_seed_definitions(db_session)
-    assert len(current_seeds) == 13
+    assert len(current_seeds) == 14
     for seed in current_seeds:
         assert seed.archived_at is None
 
