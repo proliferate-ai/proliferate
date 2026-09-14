@@ -14,7 +14,7 @@ from proliferate.server.integration_gateway.connections.seeds import SEED_DEFINI
 
 
 def test_all_seeds_round_trip_through_the_config_codec() -> None:
-    assert len(SEED_DEFINITIONS) == 13
+    assert len(SEED_DEFINITIONS) == 14
     namespaces = {seed.namespace for seed in SEED_DEFINITIONS}
     assert {"linear", "notion", "context7", "exa", "posthog", "slack"} <= namespaces
 
