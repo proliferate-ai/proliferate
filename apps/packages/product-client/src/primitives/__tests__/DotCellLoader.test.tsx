@@ -1,8 +1,19 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { DotCellLoader } from "#product/primitives/DotCellLoader";
+
+const productCss = readFileSync(
+  resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../../../design/src/css/product.css",
+  ),
+  "utf8",
+);
 
 afterEach(cleanup);
 
@@ -24,5 +35,19 @@ describe("DotCellLoader", () => {
 
     expect(loader?.getAttribute("data-variant")).toBe("wave");
     expect(loader?.getAttribute("data-size")).toBe("default");
+  });
+
+  it("keeps the persistent wave off the transform compositor path", () => {
+    const keyframes = productCss.match(
+      /@keyframes om-wave\s*\{([\s\S]*?)\n\}/,
+    )?.[1];
+    const waveRule = productCss.match(
+      /\.dot-cell-loader\[data-variant="wave"\] \.dot-cell-loader__dot\s*\{([\s\S]*?)\}/,
+    )?.[1];
+
+    expect(keyframes).toBeDefined();
+    expect(waveRule).toBeDefined();
+    expect(keyframes).not.toContain("transform:");
+    expect(waveRule).not.toContain("transform:");
   });
 });
