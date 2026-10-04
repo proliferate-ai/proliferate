@@ -119,8 +119,12 @@ SDK: [`cloud/sdk/src/client/billing.ts`](../../../cloud/sdk/src/client/billing.t
 - **M2a** Only a period boundary mints the period allowance:
   `invoice.paid` grants only for `subscription_create` / `subscription_cycle`;
   a non-boundary invoice still clears a payment-failed hold; an unknown or
-  absent `billing_reason` pages rather than logging. Because the prorated
-  seat grant runs inside the reconciler pass, any deployment with
+  absent `billing_reason` pages rather than logging. The cloud monthly
+  invoice-line quantity is the seat basis for both period compute and LLM
+  grants; missing or fractional quantities page and never fall back to the
+  reconciled live seat count. A later seat add stays in M3's prorated compute
+  adjustment and cannot top up a boundary grant on replay. Because the
+  prorated seat grant runs inside the reconciler pass, any deployment with
   `PRO_BILLING_ENABLED=true` must also run the reconciler.
 - **M3** Seat count converges to entitled membership from both drift
   directions through queued `billing_seat_adjustment` rows, never a
@@ -251,6 +255,7 @@ Named corridors and their pins (all under `server/tests/`):
 - **W1–W4** webhooks and seats — `integration/test_stripe_webhooks.py`,
   `integration/test_billing_seat_adjustment.py`,
   `integration/test_billing_invoice_period_boundary.py`,
+  `integration/test_billing_llm_seat_pool.py`,
   `integration/test_stripe_subscription_deleted_hold.py`,
   `integration/test_stripe_webhook_drop_visibility.py`.
 - Attribution and money-in under org-pays —

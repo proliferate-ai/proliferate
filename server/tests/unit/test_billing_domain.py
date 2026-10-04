@@ -33,9 +33,21 @@ from proliferate.server.billing.domain.pricing import (
 )
 from proliferate.server.billing.domain.webhooks import (
     line_is_cloud_subscription,
+    line_quantity,
     subscription_item_details,
     subscription_period,
 )
+
+
+def test_invoice_line_quantity_accepts_only_nonnegative_whole_seats() -> None:
+    assert line_quantity({"quantity": 3}) == 3
+    assert line_quantity({"quantity": None, "quantity_decimal": "3.000"}) == 3
+    assert line_quantity({"quantity_decimal": "0"}) == 0
+    assert line_quantity({"quantity_decimal": "2.5"}) is None
+    assert line_quantity({"quantity_decimal": "-1"}) is None
+    assert line_quantity({"quantity_decimal": "NaN"}) is None
+    assert line_quantity({"quantity": True}) is None
+    assert line_quantity({}) is None
 
 
 def test_domain_price_classification_distinguishes_pro_legacy_and_unknown() -> None:

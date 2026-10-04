@@ -17,6 +17,9 @@ import json
 import logging
 import time
 import uuid
+from datetime import UTC, datetime
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from sqlalchemy import select
@@ -24,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.config import settings
 from proliferate.db import engine as engine_module
-from proliferate.db.models.billing import BillingGrant, WebhookEventReceipt
+from proliferate.db.models.billing import BillingGrant, BillingSubscription, WebhookEventReceipt
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.server.billing import stripe_webhooks
 from proliferate.server.billing import webhook_drops
@@ -115,6 +118,94 @@ async def _grants(db_session: AsyncSession, subject_id: uuid.UUID) -> list[Billi
         .scalars()
         .all()
     )
+
+
+@pytest.mark.asyncio
+async def test_paid_boundary_invoice_without_seat_quantity_pages_without_grant(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    paged: list[dict[str, object]],
+) -> None:
+    _use_test_engine(monkeypatch, test_engine)
+    monkeypatch.setattr(settings, "pro_billing_enabled", True)
+    monkeypatch.setattr(settings, "stripe_pro_monthly_price_id", "price_pro")
+    monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "")
+    monkeypatch.setattr(settings, "stripe_legacy_cloud_monthly_price_id", "")
+    subject = await ensure_personal_billing_subject(db_session, uuid.uuid4())
+    subject.stripe_customer_id = "cus_missing_quantity"
+    subject_id = subject.id
+    await db_session.commit()
+
+    record = cast(
+        BillingSubscription,
+        SimpleNamespace(
+            cloud_monthly_price_id="price_pro",
+            current_period_start=datetime(2030, 1, 1, tzinfo=UTC),
+            current_period_end=datetime(2030, 2, 1, tzinfo=UTC),
+            stripe_subscription_id="sub_missing_quantity",
+            seat_quantity=3,
+        ),
+    )
+
+    async def _retrieve_subscription(subscription_id: str) -> dict[str, object]:
+        assert subscription_id == "sub_missing_quantity"
+        return {"id": subscription_id, "customer": "cus_missing_quantity", "status": "active"}
+
+    async def _sync_subscription(
+        _subscription: dict[str, object], **_kwargs: object
+    ) -> stripe_webhooks.SubscriptionSyncResult:
+        return stripe_webhooks.SubscriptionSyncResult(record=record)
+
+    monkeypatch.setattr(
+        stripe_webhooks.stripe_billing, "retrieve_subscription", _retrieve_subscription
+    )
+    monkeypatch.setattr(
+        stripe_webhooks,
+        "_sync_subscription_for_billing_notifications",
+        _sync_subscription,
+    )
+
+    with caplog.at_level(logging.INFO, logger=DROP_LOGGER):
+        await stripe_webhooks._handle_invoice_paid(
+            {
+                "id": "in_missing_quantity",
+                "customer": "cus_missing_quantity",
+                "subscription": "sub_missing_quantity",
+                "status": "paid",
+                "paid": True,
+                "billing_reason": "subscription_cycle",
+                "metadata": {"billing_subject_id": str(subject_id)},
+                "lines": {
+                    "data": [
+                        {
+                            "id": "il_missing_quantity",
+                            "pricing": {
+                                "price_details": {"price": "price_pro", "product": "prod_pro"}
+                            },
+                        }
+                    ]
+                },
+            },
+            event_id="evt_missing_quantity",
+        )
+
+    _assert_drop_logged(
+        caplog,
+        drop_reason=DropReason.INVOICE_CLOUD_LINE_QUANTITY_MISSING,
+        event_id="evt_missing_quantity",
+        level=logging.ERROR,
+    )
+    assert len(paged) == 1
+    assert (
+        paged[0]["extras"]["drop_reason"]  # type: ignore[index]
+        == DropReason.INVOICE_CLOUD_LINE_QUANTITY_MISSING
+    )
+    rows = await db_session.execute(
+        select(BillingGrant).where(BillingGrant.billing_subject_id == subject_id)
+    )
+    assert rows.scalars().all() == []
 
 
 @pytest.mark.asyncio

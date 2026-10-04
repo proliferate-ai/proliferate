@@ -51,7 +51,8 @@ SPAN_STATUSES = _set(
     "unimplemented internal_error unavailable data_loss unauthenticated"
 )
 DROP_REASONS = _set(
-    "invoice_id_not_string invoice_no_cloud_subscription_line invoice_subject_unresolved "
+    "invoice_id_not_string invoice_no_cloud_subscription_line invoice_cloud_line_quantity_missing "
+    "invoice_subject_unresolved "
     "invoice_period_grant_gate_closed invoice_not_period_boundary unhandled_event_type "
     "checkout_session_unhandled_mode_or_purpose checkout_session_id_not_string "
     "checkout_session_subject_unresolved checkout_session_refill_price_missing "

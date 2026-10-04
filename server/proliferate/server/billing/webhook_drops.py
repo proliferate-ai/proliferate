@@ -69,6 +69,7 @@ class DropReason:
 
     INVOICE_ID_NOT_STRING = "invoice_id_not_string"
     INVOICE_NO_CLOUD_LINE = "invoice_no_cloud_subscription_line"
+    INVOICE_CLOUD_LINE_QUANTITY_MISSING = "invoice_cloud_line_quantity_missing"
     INVOICE_SUBJECT_UNRESOLVED = "invoice_subject_unresolved"
     INVOICE_GRANT_GATE_CLOSED = "invoice_period_grant_gate_closed"
     INVOICE_NOT_PERIOD_BOUNDARY = "invoice_not_period_boundary"
@@ -247,6 +248,23 @@ def report_invoice_no_cloud_line(
         money_received=invoice_is_paid(invoice),
         line_item_count=len(line_items),
         pro_pricing_enabled=settings.pro_billing_enabled,
+    )
+
+
+def report_invoice_cloud_line_quantity_missing(
+    event_id: object,
+    invoice: dict[str, Any],
+    invoice_id: str,
+    subject: BillingSubject,
+) -> None:
+    paid = invoice_is_paid(invoice)
+    report_drop(
+        DropReason.INVOICE_CLOUD_LINE_QUANTITY_MISSING,
+        event_id,
+        invoice_id,
+        money_received=paid,
+        subject_id=str(subject.id),
+        paid=paid,
     )
 
 
