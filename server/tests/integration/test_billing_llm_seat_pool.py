@@ -100,6 +100,7 @@ def _invoice_payload(
     *,
     subject_id: uuid.UUID,
     org_id: uuid.UUID,
+    seats: int = 3,
     billing_reason: str = "subscription_cycle",
 ) -> dict:
     return {
@@ -124,6 +125,7 @@ def _invoice_payload(
             "data": [
                 {
                     "id": "il_llm_pool",
+                    "quantity": seats,
                     "pricing": {
                         "price_details": {"price": "price_pro", "product": "prod_pro"},
                         "type": "price_details",
@@ -221,24 +223,26 @@ async def test_seat_pool_grants_five_per_seat_and_resets_each_period(
     assert grants[0].amount_usd == Decimal("15")
     assert grants[0].expires_at == datetime.fromtimestamp(_PERIOD1_END, tz=UTC)
 
-    # Period 2 (renewal): a fresh pool grant is issued for the new period.
+    # Period 2 is billed for two seats even though the live subscription and
+    # membership still report three. The period pool follows the paid invoice.
     current["start"] = _PERIOD2_START
     current["end"] = _PERIOD2_END
-    await stripe_webhooks._handle_invoice_paid(invoice)
+    period2_invoice = _invoice_payload(subject_id=subject_id, org_id=org_id, seats=2)
+    await stripe_webhooks._handle_invoice_paid(period2_invoice)
     db_session.expire_all()
 
     grants = await _list_seat_pool_grants(db_session, subject_id)
     assert len(grants) == 2
-    assert {g.amount_usd for g in grants} == {Decimal("15")}
+    assert {g.amount_usd for g in grants} == {Decimal("10"), Decimal("15")}
 
     # Reset semantics: at a point inside period 2 the period-1 pool has expired,
-    # so remaining reflects only the current period's $15 (no roll-over of the
+    # so remaining reflects only the current period's $10 (no roll-over of the
     # first period's unused allocation).
     period2_midpoint = datetime.fromtimestamp((_PERIOD2_START + _PERIOD2_END) // 2, tz=UTC)
     balance = await agent_gateway_store.get_remaining_credit_usd(
         db_session, subject_id, now=period2_midpoint
     )
-    assert balance.granted_usd == Decimal("15")
+    assert balance.granted_usd == Decimal("10")
 
 
 @pytest.mark.asyncio

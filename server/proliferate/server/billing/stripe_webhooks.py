@@ -72,6 +72,9 @@ from proliferate.server.billing.domain.webhooks import (
     line_items_from_object as _line_items_from_object,
 )
 from proliferate.server.billing.domain.webhooks import (
+    line_quantity as _line_quantity,
+)
+from proliferate.server.billing.domain.webhooks import (
     metadata as _metadata,
 )
 from proliferate.server.billing.domain.webhooks import (
@@ -552,6 +555,15 @@ async def _handle_invoice_paid(
         == BILLING_PRICE_CLASS_PRO
         and subscription_record.current_period_start is not None
     ):
+        period_seat_quantity = _line_quantity(cloud_line)
+        if period_seat_quantity is None:
+            webhook_drops.report_invoice_cloud_line_quantity_missing(
+                event_id, invoice, invoice_id, subject
+            )
+            await _run_billing_store_write(
+                clear_payment_failed_holds, billing_subject_id=subject.id
+            )
+            return notifications
         period_start_unix = int(subscription_record.current_period_start.timestamp())
         await _run_billing_store_write(
             ensure_billing_grant_record,
@@ -559,7 +571,7 @@ async def _handle_invoice_paid(
             billing_subject_id=subject.id,
             grant_type=PRO_PERIOD_GRANT_TYPE,
             hours_granted=pro_period_grant_hours(
-                seat_quantity=subscription_record.seat_quantity,
+                seat_quantity=period_seat_quantity,
                 hours_per_seat=compute_hours_per_seat(),
             ),
             effective_at=subscription_record.current_period_start,
@@ -580,7 +592,7 @@ async def _handle_invoice_paid(
                 billing_subject_id=subject.id,
                 user_id=subject.user_id,
                 source=LLM_CREDIT_SOURCE_SEAT_POOL,
-                amount_usd=pro_llm_pool_usd(subscription_record.seat_quantity),
+                amount_usd=pro_llm_pool_usd(period_seat_quantity),
                 expires_at=subscription_record.current_period_end,
                 source_ref=pro_llm_pool_grant_source_ref(
                     subscription_id=subscription_record.stripe_subscription_id,

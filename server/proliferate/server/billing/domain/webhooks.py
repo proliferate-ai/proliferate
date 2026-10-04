@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from proliferate.constants.billing import (
@@ -80,6 +81,26 @@ def line_price_id(line: dict[str, Any]) -> str | None:
     if isinstance(price_details, dict) and isinstance(price_details.get("price"), str):
         return price_details["price"]
     return None
+
+
+def line_quantity(line: dict[str, Any]) -> int | None:
+    """Return a Stripe invoice-line quantity when it represents whole seats."""
+    quantity = line.get("quantity")
+    if quantity is not None:
+        if isinstance(quantity, int) and not isinstance(quantity, bool) and quantity >= 0:
+            return quantity
+        return None
+
+    quantity_decimal = line.get("quantity_decimal")
+    if not isinstance(quantity_decimal, str):
+        return None
+    try:
+        parsed = Decimal(quantity_decimal)
+    except InvalidOperation:
+        return None
+    if not parsed.is_finite() or parsed < 0 or parsed != parsed.to_integral_value():
+        return None
+    return int(parsed)
 
 
 def price_matches(line: dict[str, Any], *, price_id: str, lookup_key: str | None = None) -> bool:

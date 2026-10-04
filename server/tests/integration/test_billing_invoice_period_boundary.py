@@ -120,7 +120,7 @@ async def _seed_org_subject(
     return organization_id, subject_id
 
 
-def _invoice(*, subject_id: uuid.UUID, invoice_reason: str) -> dict[str, Any]:
+def _invoice(*, subject_id: uuid.UUID, invoice_reason: str, seats: int = 2) -> dict[str, Any]:
     return {
         "id": f"in_boundary_{invoice_reason}",
         "customer": "cus_boundary",
@@ -129,7 +129,9 @@ def _invoice(*, subject_id: uuid.UUID, invoice_reason: str) -> dict[str, Any]:
         "billing_reason": invoice_reason,
         "subscription": "sub_boundary",
         "metadata": {"billing_subject_id": str(subject_id)},
-        "lines": {"data": [{"id": "il_boundary", "price": {"id": "price_pro"}}]},
+        "lines": {
+            "data": [{"id": "il_boundary", "quantity": seats, "price": {"id": "price_pro"}}]
+        },
     }
 
 
@@ -224,7 +226,7 @@ async def test_mid_period_seat_proration_does_not_re_grant_the_period(
     # what made the proration invoice top the existing period grant up.
     await _add_member(db_session, organization_id)
     await stripe_webhooks._handle_invoice_paid(
-        _invoice(subject_id=subject_id, invoice_reason="subscription_update")
+        _invoice(subject_id=subject_id, invoice_reason="subscription_update", seats=3)
     )
 
     grants = await _period_grants(db_session, subject_id)
