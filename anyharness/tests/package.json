@@ -12,8 +12,8 @@
     "test:cloud:e2b": "tsx src/runners/run-cloud-runtime-suite.ts e2b"
   },
   "devDependencies": {
-    "@types/node": "^24.13.3",
-    "tsx": "^4.23.12",
+    "@types/node": "^24.19.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.0",
     "vitest": "^3.2.7"
   }
