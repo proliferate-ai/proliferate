@@ -363,7 +363,7 @@ jobs:
             echo "- Desktop: \`${{ needs.deploy-desktop.result }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ needs.plan.outputs.dry_run == 'true' && 'deploy-plan-staging' || 'deploy-summary-staging' }}
           path: deploy-summary/staging.json

@@ -123,7 +123,7 @@ jobs:
       - name: Test self-host deploy and CloudFormation controls
         run: server/deploy/tests/run.sh
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
@@ -136,7 +136,7 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # Build once and load into the local Docker engine so the compose stack
       # reuses it (no registry push). GHA cache is shared from the main-branch
