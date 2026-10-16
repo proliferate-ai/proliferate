@@ -31,7 +31,7 @@ pub struct CatalogProbeArgs {
     #[arg(long, default_value = "scripts/agent-catalog/generated")]
     pub out: String,
 
-    /// Seconds to wait for a ConfigOptionUpdate after each model switch
+    /// Seconds to wait for the setter's exact model read-back after each switch
     #[arg(long, default_value_t = 8)]
     pub model_switch_timeout_secs: u64,
 
