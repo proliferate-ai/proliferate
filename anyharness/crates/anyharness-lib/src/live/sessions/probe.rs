@@ -23,7 +23,7 @@ use super::driver::SessionMcpServer;
 
 mod config_options;
 use config_options::{
-    current_model_from_config_options, model_entries_from_config_options,
+    capture_model_options, current_model_from_config_options, model_entries_from_config_options,
     switch_model_and_capture_options,
 };
 mod model_setter;
@@ -62,8 +62,8 @@ pub struct ProbeOptions {
     /// scratch so ONE guard cleans everything — including on a cancelled probe,
     /// whose own teardown never runs.
     pub workspace_root: Option<PathBuf>,
-    /// How long to wait for a ConfigOptionUpdate notification after a model
-    /// switch before recording the switch as unobserved.
+    /// How long to wait for the config setter's exact model read-back before
+    /// recording the switch as unobserved.
     pub model_switch_timeout: Duration,
     /// Optional cap on how many models to switch through (safety valve for
     /// harnesses with very large dynamic model lists).
@@ -135,8 +135,9 @@ pub struct ProbeModelEntry {
     pub model_id: String,
     pub name: String,
     pub description: Option<String>,
-    /// Raw ACP config options observed after switching to this model, or null
-    /// when no ConfigOptionUpdate arrived within the timeout.
+    /// Raw ACP config options observed at session creation for the exact initial
+    /// model or after switching to an alternative, or null when exact read-back
+    /// was not observed within the timeout.
     pub config_options: Option<serde_json::Value>,
 }
 
@@ -351,6 +352,7 @@ async fn run_enumeration(
     let native_session_id = new_session.session_id.to_string();
 
     let baseline_config_options = serde_json::to_value(&new_session.config_options)?;
+    let baseline_config_option_values = new_session.config_options.clone().unwrap_or_default();
     let modes = serde_json::to_value(&new_session.modes)?;
     let mut current_model_id: Option<String> = None;
     let current_mode_id = new_session
@@ -364,13 +366,11 @@ async fn run_enumeration(
     if available.is_empty() {
         // Some harnesses (e.g. OpenCode) expose the model list as a `model`
         // config option instead of the ACP models block.
-        if let Some((config_id, entries)) = model_entries_from_config_options(
-            &new_session.config_options.clone().unwrap_or_default(),
-        ) {
+        if let Some((config_id, entries)) =
+            model_entries_from_config_options(&baseline_config_option_values)
+        {
             model_source = "modelConfigOption";
-            current_model_id = current_model_from_config_options(
-                &new_session.config_options.clone().unwrap_or_default(),
-            );
+            current_model_id = current_model_from_config_options(&baseline_config_option_values);
             model_config_id = Some(config_id);
             available = entries;
         }
@@ -437,13 +437,20 @@ async fn run_enumeration(
             // Model exposed as a config option: switch through it; the
             // response carries the updated option set directly, including the
             // exact model read-back used to admit the capture.
-            switch_model_and_capture_options(
-                conn,
-                &native_session_id,
-                config_id,
+            capture_model_options(
+                &baseline_config_option_values,
+                current_model_id.as_deref(),
                 &model_id,
-                options.model_switch_timeout,
-                warnings,
+                || {
+                    switch_model_and_capture_options(
+                        conn,
+                        &native_session_id,
+                        config_id,
+                        &model_id,
+                        options.model_switch_timeout,
+                        warnings,
+                    )
+                },
             )
             .await?
         } else {

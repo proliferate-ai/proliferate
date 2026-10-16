@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::time::Duration;
 
 use agent_client_protocol as acp;
@@ -29,6 +30,34 @@ pub(super) fn model_switch_confirmed(
     requested_model_id: &str,
 ) -> bool {
     current_model_from_config_options(config_options).as_deref() == Some(requested_model_id)
+}
+
+pub(super) async fn capture_model_options<Switch, SwitchFuture>(
+    baseline_config_options: &[acp::schema::SessionConfigOption],
+    current_model_id: Option<&str>,
+    requested_model_id: &str,
+    switch_capture: Switch,
+) -> anyhow::Result<Option<serde_json::Value>>
+where
+    Switch: FnOnce() -> SwitchFuture,
+    SwitchFuture: Future<Output = anyhow::Result<Option<serde_json::Value>>>,
+{
+    if current_model_id == Some(requested_model_id) {
+        return capture_current_model_options(baseline_config_options, requested_model_id);
+    }
+    switch_capture().await
+}
+
+fn capture_current_model_options(
+    baseline_config_options: &[acp::schema::SessionConfigOption],
+    requested_model_id: &str,
+) -> anyhow::Result<Option<serde_json::Value>> {
+    if !model_switch_confirmed(baseline_config_options, requested_model_id) {
+        return Ok(None);
+    }
+    Ok(Some(elide_model_values(serde_json::to_value(
+        baseline_config_options,
+    )?)))
 }
 
 pub(super) async fn switch_model_and_capture_options(
@@ -134,7 +163,9 @@ pub(super) fn model_entries_from_config_options(
 mod tests {
     use agent_client_protocol as acp;
 
-    use super::model_switch_confirmed;
+    use std::cell::Cell;
+
+    use super::{capture_current_model_options, capture_model_options, model_switch_confirmed};
 
     #[test]
     fn model_switch_requires_exact_returned_current_value() {
@@ -154,5 +185,73 @@ mod tests {
             "opus"
         ));
         assert!(!model_switch_confirmed(&[option], "fable"));
+    }
+
+    #[test]
+    fn baseline_current_model_is_captured_without_redundant_setter() {
+        let mut model = acp::schema::SessionConfigOption::select(
+            "model",
+            "Model",
+            "opus",
+            vec![
+                acp::schema::SessionConfigSelectOption::new("opus", "Opus"),
+                acp::schema::SessionConfigSelectOption::new("fable", "Fable"),
+            ],
+        );
+        model.category = Some(acp::schema::SessionConfigOptionCategory::Model);
+        let effort = acp::schema::SessionConfigOption::select(
+            "effort",
+            "Effort",
+            "high",
+            vec![acp::schema::SessionConfigSelectOption::new("high", "High")],
+        );
+        let baseline = vec![model, effort];
+
+        let captured = capture_current_model_options(&baseline, "opus")
+            .expect("serialize exact baseline")
+            .expect("exact current model is already observed");
+
+        assert_eq!(captured[0]["currentValue"], "opus");
+        assert_eq!(captured[0]["options"], serde_json::json!([]));
+        assert_eq!(captured[0]["valuesElided"], true);
+        assert_eq!(captured[1]["currentValue"], "high");
+        assert!(capture_current_model_options(&baseline, "fable")
+            .expect("serialize mismatch check")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn capture_orchestrator_skips_current_and_requires_alternative_readback() {
+        let mut model = acp::schema::SessionConfigOption::select(
+            "model",
+            "Model",
+            "opus",
+            vec![
+                acp::schema::SessionConfigSelectOption::new("opus", "Opus"),
+                acp::schema::SessionConfigSelectOption::new("fable", "Fable"),
+            ],
+        );
+        model.category = Some(acp::schema::SessionConfigOptionCategory::Model);
+        let baseline = vec![model];
+
+        let current_switch_called = Cell::new(false);
+        let current = capture_model_options(&baseline, Some("opus"), "opus", || async {
+            current_switch_called.set(true);
+            Ok(None)
+        })
+        .await
+        .expect("capture current baseline");
+        assert!(current.is_some());
+        assert!(!current_switch_called.get());
+
+        let alternative_switch_called = Cell::new(false);
+        let alternative = capture_model_options(&baseline, Some("opus"), "fable", || async {
+            alternative_switch_called.set(true);
+            Ok(None)
+        })
+        .await
+        .expect("reject missing alternative readback");
+        assert!(alternative.is_none());
+        assert!(alternative_switch_called.get());
     }
 }
