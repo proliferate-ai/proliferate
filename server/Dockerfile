@@ -61,7 +61,7 @@ ENV VITE_PROLIFERATE_RELEASE=${VITE_PROLIFERATE_RELEASE}
 RUN pnpm shared:build && pnpm web:build
 
 # ── Python runtime ───────────────────────────────────────────────────────────
-FROM python:3.12-slim AS base
+FROM python:3.15-slim AS base
 
 WORKDIR /app
 ENV PYTHONPATH=/app
